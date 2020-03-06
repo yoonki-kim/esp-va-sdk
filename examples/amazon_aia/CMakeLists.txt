@@ -1,0 +1,84 @@
+
+# (Automatically converted from project Makefile by convert_to_cmake.py.)
+
+# The following lines of boilerplate have to be in your project's CMakeLists
+# in this exact order for cmake to work correctly
+cmake_minimum_required(VERSION 3.5)
+
+
+set(VOICE_ASSISTANT "aia" CACHE INTERNAL "")
+
+if((NOT(DEFINED AUDIO_BOARD_PATH)) AND (NOT(DEFINED ENV{AUDIO_BOARD_PATH})))
+    MESSAGE(STATUS "AUDIO_BOARD_PATH not defined")
+    return()
+endif()
+
+if((NOT(DEFINED AWS_IOT_PATH)) AND (NOT(DEFINED ENV{AWS_IOT_PATH})))
+    MESSAGE(STATUS "AWS_IOT_PATH not defined")
+    return()
+endif()
+
+#Setting required environment and local variables
+if(NOT (DEFINED AUDIO_BOARD_PATH))
+    set(AUDIO_BOARD_PATH $ENV{AUDIO_BOARD_PATH})
+endif()
+
+if(NOT (DEFINED AWS_IOT_PATH))
+    set(AWS_IOT_PATH $ENV{AWS_IOT_PATH})
+endif()
+
+if(DEFINED PARTITIONS_4MB_FLASH_CSV)
+    set(ENV{PARTITION_TABLE_CSV_PATH} CMAKE_CURRENT_SOURCE_DIR/partitions_4mb_flash.csv)
+endif()
+
+set(EXTRA_COMPONENT_DIRS ../../components ${AUDIO_BOARD_PATH}/../../../ ${AWS_IOT_PATH}/ )
+
+if(DEFINED CLOUD_AGENT_PATH)
+    list(APPEND EXTRA_COMPONENT_DIRS ${CLOUD_AGENT_PATH}/components)
+endif()
+
+include($ENV{AUDIO_BOARD_PATH}/audio_board.cmake)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+idf_build_set_property(COMPILE_OPTIONS "-DVOICE_ASSISTANT_AIA" APPEND)
+
+# SPIFFS specific configuration
+if(DEFINED DSP_EN_SPI_FFS)
+    set(ENV{PARTITION_TABLE_CSV_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/partitions_mkspiffs.csv)
+    set(MKSPIFFS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/mkspiffs)
+
+    execute_process(COMMAND uname -s OUTPUT_VARIABLE DETECTED_OS)
+    if(${DETECTED_OS} STRGREATER_EQUAL "Windows")
+        set(MKSPIFFS_EXEC_PATH ${MKSPIFFS_PATH}/win32/mkspiffs.exe)
+    elseif(${DETECTED_OS} STRGREATER_EQUAL "Darwin")
+        set(MKSPIFFS_EXEC_PATH "${MKSPIFFS_PATH}/osx/mkspiffs")
+    elseif(${DETECTED_OS} STRGREATER_EQUAL "Linux")
+        execute_process(COMMAND uname -m OUTPUT_VARIABLE DETECTED_ARCHITECTURE)
+        if(${DETECTED_ARCHITECTURE} STRGREATER_EQUAL x86_64)
+            set(MKSPIFFS_EXEC_PATH ${MKSPIFFS_PATH}/linux64/mkspiffs)
+        else()
+            set(MKSPIFFS_EXEC_PATH ${MKSPIFFS_PATH}/linux32/mkspiffs)
+        endif()
+    endif()
+
+    set(SPIFFS_OFFSET 0x700000)
+    set(SPIFFS_BIN ${CMAKE_CURRENT_SOURCE_DIR}/build/spiffs-alexa-img.bin)
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/build/spiffs-alexa-img.bin
+        COMMAND ${MKSPIFFS_EXEC_PATH} -c ${IPC_DRV_PATH}/firmware -b 4096 -p 256 -s 0x100000 ${CMAKE_CURRENT_SOURCE_DIR}/build/spiffs-alexa-img.bin)
+    add_custom_target(spiffs_make ALL
+        DEPENDS build/spiffs-alexa-img.bin)
+    set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/build/spiffs-alexa-img.bin")
+endif()
+
+project(aia)
+
+if (DEFINED DSP_EN_SPI_FFS)
+    esptool_py_custom_target(spiffs_flash spiffs_flash "spiffs_make")
+    add_dependencies(flash spiffs_flash)
+    configure_file(
+        "flash_spiffs_flash_args.in"
+        "${CMAKE_BINARY_DIR}/flash_spiffs_flash_args"
+        )
+endif()
