@@ -25,7 +25,6 @@
 #include <string.h>
 #include <esp_err.h>
 #include <esp_log.h>
-#include <rom/queue.h>
 #include <m3u8_parser.h>
 #include <httpc.h>
 #include <esp_audio_mem.h>

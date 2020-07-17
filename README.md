@@ -18,6 +18,7 @@
     * [3.2 Using Your AWS Account](#32-using-your-aws-account)
 * [4. Device Provisioning](#4-device-provisioning)
     * [4.1 Configuration Steps](#41-configuration-steps)
+    * [4.2 Additional Device Settings](#42-additional-device-settings)
 * [5. Device Performance](#5-device-performance)
     * [5.1 CPU and Memory usage](#51-cpu-and-memory-usage)
     * [5.2 User Perceived Latency (UPL)](#52-user-perceived-latency-upl)
@@ -43,27 +44,33 @@
     * [8.3 Audio Codec](#83-audio-codec)
         * [8.3.1 Using Another Supported Audio Codec](#831-using-another-supported-audio-codec)
         * [8.3.2 Writing your own Audio Codec Driver](#832-writing-your-own-audio-codec-driver)
-* [9. Production Considerations](#9-production-considerations)
-    * [9.1 Over-the-air Updates (OTA)](#91-over-the-air-updates-ota)
-    * [9.2 Manufacturing](#92-manufacturing)
-        * [9.2.1 Mass Manufacturing Utility](#921-mass-manufacturing-utility)
-        * [9.2.2 Pre-Provisioned Modules](#922-pre-provisioned-modules)
-    * [9.3 Security](#93-security)
-        * [9.3.1 Secure Boot](#931-secure-boot)
-        * [9.3.2 Flash Encryption](#932-flash-encryption)
-        * [9.3.3 NVS Encryption](#933-nvs-encryption)
-* [A1 Appendix Changing the DSP SoC](#a1-appendix-changing-the-dsp-soc)
-    * [A1.1 Using Another DSP Driver](#a11-using-another-dsp-driver)
-    * [A1.2 Writing your own DSP Driver](#a12-writing-your-own-dsp-driver)
-* [A2 Appendix FAQs](#a2-appendix-faqs)
-    * [A2.1 Compilation errors](#a21-compilation-errors)
-    * [A2.2 Device setup using the Mobile app](#a22-device-setup-using-the-mobile-app)
-    * [A2.3 Device crashing](#a23-device-crashing)
-    * [A2.4 Device not crashed but not responding](#a24-device-not-crashed-but-not-responding)
-    * [A2.5 Migrating to your own AWS account](#a25-migrating-to-your-own-aws-account)
+    * [8.4 DSP Driver](#84-dsp-driver)
+        * [8.4.1 Using Another DSP Driver](#841-using-another-dsp-driver)
+        * [8.4.2 Writing your own DSP Driver](#842-writing-your-own-dsp-driver)
+* [9. Integration other components](#9-integrating-other-components)
+    * [9.1 RainMaker](#91-rainmaker)
+        * [9.1.1 Environment Setup](#911-environment-setup)
+        * [9.1.2 Device Setup](#912-device-setup)
+        * [9.1.3 Device Provisioning](#913-device-provisioning)
+        * [9.1.4 Customisation](#914-customisation)
+* [10. Production Considerations](#10-production-considerations)
+    * [10.1 Over-the-air Updates (OTA)](#101-over-the-air-updates-ota)
+    * [10.2 Manufacturing](#102-manufacturing)
+        * [10.2.1 Mass Manufacturing Utility](#1021-mass-manufacturing-utility)
+        * [10.2.2 Pre-Provisioned Modules](#1022-pre-provisioned-modules)
+    * [10.3 Security](#103-security)
+        * [10.3.1 Secure Boot](#1031-secure-boot)
+        * [10.3.2 Flash Encryption](#1032-flash-encryption)
+        * [10.3.3 NVS Encryption](#1033-nvs-encryption)
+* [A1 Appendix FAQs](#a1-appendix-faqs)
+    * [A1.1 Compilation errors](#a11-compilation-errors)
+    * [A1.2 Device setup using the Mobile app](#a12-device-setup-using-the-mobile-app)
+    * [A1.3 Device crashing](#a13-device-crashing)
+    * [A1.4 Device not crashed but not responding](#a14-device-not-crashed-but-not-responding)
+    * [A1.5 Migrating to your own AWS account](#a15-migrating-to-your-own-aws-account)
 
 # 0. Important Note
-The Wake-word ("Alexa") recognition software that is part of this repository is for evaluation only. Please contact sales@espressif.com for production-ready Wake-word recognition DSP Firmware that is available from our DSP partners.
+The Wake-word ("Alexa") recognition software that is part of the [GitHub repository](https://github.com/espressif/esp-va-sdk/tree/feature/aia-beta) is for evaluation only. Please contact sales@espressif.com for production-ready Wake-word recognition DSP Firmware that is available from our DSP partners.
 
 # 1. Introduction
 
@@ -198,12 +205,21 @@ $ export ESPPORT=/dev/cu.SLAB_USBtoUART (or /dev/ttyUSB0 or /dev/ttyUSB1 on Linu
 $ export IDF_PATH=/path/to/esp-idf
 
 $ export AWS_IOT_PATH=/path/to/esp-aws-iot
+
+$ . $IDF_PATH/export.sh
 ```
 
 Set audio_board path. e.g. For ESP32-Vaquita-DSPG:
 
 ```
-$ export AUDIO_BOARD_PATH=/path/to/esp-va-sdk/board_support_pkgs/esp32-vaquita-dspg/audio_board/audio_board_vaquita_dspg
+$ export AUDIO_BOARD_PATH=/path/to/esp-va-sdk/components/audio_hal/audio_board/audio_board_vaquita_dspg
+```
+
+Menuconfig changes: Do this change only if you are using ESP32-WROVER-E module:
+```
+$ idf.py menuconfig
+
+-> component config -> esp32 specific -> Minimum Supported ESP32 Revision -> change Rev_0 to Rev_3
 ```
 
 ## 2.4 Flashing the Firmware
@@ -212,7 +228,24 @@ $ export AUDIO_BOARD_PATH=/path/to/esp-va-sdk/board_support_pkgs/esp32-vaquita-d
 $ idf.py flash monitor
 ```
 
-Now you are ready to build, flash and test the device firmware. We haven't yet configured AWS IoT certificates into the device. So even if the device boots-up, it would not yet successfully communicate with Alexa.
+*   Note: If you are getting build errors like:
+    ```
+    Error: undefined reference to '<api_name>'
+    ```
+    Add the below line in *esp-idf/tools/cmake/project.cmake:394*
+    ```
+    target_link_libraries(${project_elf} "-Wl,--start-group")
+    ```
+*   If you are getting continuous prints like:
+    ```
+    spi_master: Allocate RX buffer for DMA
+    ```
+    Change the below ESP_LOGI to ESP_LOGD in *esp-idf/components/driver/spi_master.c:859*
+    ```
+    ESP_LOGD( SPI_TAG, "Allocate RX buffer for DMA" );
+    ```
+
+We haven't yet configured AWS IoT certificates into the device. So even if the device boots-up, it would not yet successfully communicate with Alexa.
 
 That step is discussed in the next section.
 
@@ -226,6 +259,7 @@ If you wish to do a quick evaluation of AVS for AWS IoT and you do not have an A
 
 1. Certificate Generation:
     1. You can generate temporary AWS IoT certificates from here: [Generate Certificate](https://espressif.github.io/esp-va-sdk/).
+    2. You will get an email with the device certificates.
 2. Certificate Flashing:
     1. After receiving the device certificates, modify the file mfg_config.csv and add the relevant paths for all the files.
     2. Now run the following command to generate the manufacturing partition (mfg.bin) for your device.
@@ -249,8 +283,8 @@ If you want to use your own AWS account for the AWS IoT certificates and using y
     2.  Create your AVS product.
         1.  If you wish to do a quick evaluation you may skip the AVS product creation step, and use Espressif's AVS product instead. For a quick evaluation, this step will save you the hassle of regenerating the Android/iOS phone applications that should be linked with your AVS product. If you wish to try this, please contact your Espressif contact person for the procedure, and skip the next bullet item. If not, please proceed with the next steps.
         2.  Steps for creating the AVS product:
-            1.  Go to [Amazon Developer Account](http://developer.amazon.com) and create an account. Then go to [AVS Product Page](https://developer.amazon.com/alexa/console/avs/home) and create an AVS product.
-            2.  While doing so, make sure to select 'yes' in the section where you can link your AWS account. Enter your AWS Account ID (that you noted above) there and complete the creation of the product.
+            1.  Go to [Amazon Developer Account](http://developer.amazon.com) and create an account. Then go to [AVS Product Page](https://developer.amazon.com/alexa/console/avs/home) and create an AVS product with 'Product category' as 'Smart Home'.
+            2.  While doing so, make sure to select 'Yes' in the section 'Is this device associated with one or more AWS IoT Core Accounts?'. Enter your AWS Account ID (that you noted above) there and complete the creation of the product.
             3.  Note: You will also have to build your own Android and iOS app with this product_id and security_profile to sign-in into the device.
     3.  Additionally, your AWS account also needs to be configured with the appropriate CloudFormation templates. You only need to do this step if your AWS Account was created before the year 2020. If your AWS account was created later, feel free to ignore this setup.
         1.  Please get in touch with your Espressif contact for the CloudFormation templates. Please ensure that this configuration is also done.
@@ -301,12 +335,12 @@ If you want to use your own AWS account for the AWS IoT certificates and using y
     3.  Go to the example application *examples/amazon_aia/* and use
         the command:
         ```
-        $ make menuconfig
+        $ idf.py menuconfig
         ```
     4.  Go to 'Voice Assistant Configuration'.
     5.  Update the AWS Account ID to have your account id
     6.  Update the AWS Endpoint to have your IoT endpoint
-4.  Device Firmware: Configure AWS IoT Certificates
+4.  Device Firmware: Configure AWS IoT Certificates:
     1.  Copy the 3 files downloaded after creating the AWS IoT Thing above, to the directory *examples/amazon_aia/certs/*
     2.  Modify the file *examples/amazon_aia/certs/mfg_config.csv* and add the relevant paths for all the files.
     3.  Generate the manufacturing partition (mfg.bin) with the command:
@@ -327,8 +361,7 @@ Now the device is functional.
 
 The configuration step consists of (a) configuring the Wi-Fi network and (b) signing into your Alexa account and linking the device. Espressif has released the following phone applications that facilitate the same:
 
-**iOS**: [iOS app](https://apps.apple.com/in/app/esp-alexa/id1464127534)
-
+**iOS**: [iOS app](https://apps.apple.com/in/app/esp-alexa/id1464127534) <br>
 **Android**: [Android app](https://play.google.com/store/apps/details?id=com.espressif.provbleavs)
 
 Please install the relevant application on your phone before your proceed.
@@ -339,7 +372,7 @@ Here are the steps to configure the Dev Kit
 
 *   On first boot-up, the Dev Kit is in configuration mode. This is indicated by Orange LED pattern. Please ensure that the LED pattern is seen as described above, before you proceed.
 *   Launch the phone app.
-*   Select the option *Add New Device.*
+*   Select the option *Add New Device*.
 
 <center>
     <img src="https://github.com/espressif/esp-va-sdk/wiki/aia_images/esp_alexa_app_home.png" alt="App Home" title="App Home" width="300" />
@@ -351,7 +384,7 @@ Here are the steps to configure the Dev Kit
     <img src="https://github.com/espressif/esp-va-sdk/wiki/aia_images/esp_alexa_app_discover_devices.png" alt="App Discover Devices" title="App Discover Devices" width="300" />
 </center>
 
-*   Now you can sign-in to your Amazon Alexa account. If you have Amazon Shopping app installed on the same phone, app will automatically sign-in with the account the shopping app is signed in to. Otherwise it will open a login page on the phone's default browser.
+*   Now you can sign-in to your Amazon Alexa account. If you have Amazon Shopping app installed on the same phone, app will automatically sign-in with the account the shopping app is signed in to. Otherwise it will open a login page on the phone's default browser. (It is recommended to install the Amazon Shopping app on your phone to avoid any other browser related errors.)
 
 <center>
     <img src="https://github.com/espressif/esp-va-sdk/wiki/aia_images/esp_alexa_app_sign_in.png" alt="App Sign-in" title="App Sign-in" width="300" />
@@ -372,6 +405,19 @@ Here are the steps to configure the Dev Kit
 
 *   You are now fully setup. You can now say "Alexa" followed by the query you wish to ask.
 
+## 4.2 Additional Device Settings
+
+Some device settings like Volume Control, Locale Change, etc. can also be controlled through the phone app.
+
+*   Launch the phone app, select the option *Manage devices*.
+
+<center>
+    <img src="https://github.com/espressif/esp-va-sdk/wiki/aia_images/esp_alexa_app_home.png" alt="App Home" title="App Home" width="300" />
+</center>
+
+*   Make sure you are connected to the same network as the device and also that SSDP packets can be sent on your network.
+*   Now select your device from the list of devices for the device settings.
+
 # 5. Device Performance
 
 ## 5.1 CPU and Memory usage
@@ -380,9 +426,11 @@ The following is the CPU and Memory Usage on running AVS for AWS IoT.
 
 |                                       |Up And Running |Normal Queries |Amazon Music   |
 |:-                                     |:-:            |:-:            |:-:            |
-|**CPU Usage**                          |5%             |20%            |19%            |
-|**Free Internal Memory (328KB DRAM)**  |96KB           |96KB           |96KB           |
-|**Free External Memory (4MB PSRAM)**   |3.0MB          |2.9MB          |2.9MB          |
+|**CPU Usage**                          |6%             |23%            |28%            |
+|**Free Internal Memory (328KB DRAM)**  |113KB          |113KB          |113KB          |
+|**Free External Memory (4MB PSRAM)**   |2.65MB         |2.62MB         |2.62MB         |
+
+**Flash Usage**: Firmware binary size: 3.1MB
 
 This should give you a good idea about the amount of CPU and free memory that is available for you to run your application's code. For the free memory, a minimum of 50KB of free internal memory is required for healthy Alexa operation.
 
@@ -404,25 +452,25 @@ These instructions are with reference to the document *Amazon AVS Functional Qua
 
 ## 6.1 Wi-Fi AP Change (Test Case 1.7)
 
-This test requires us to change the Wi-Fi configuration of the DUT. Please refer to the Section [Button Functions](#131-buttons), for details about how the Wi-Fi configuration can be erased.
+This test requires us to change the Wi-Fi configuration of the device. Please refer to the Section [Button Functions](#131-buttons), for details about how the Wi-Fi configuration can be erased.
 
-Once the Wi-Fi configuration is erased, the DUT will be back in the configuration mode. You can relaunch the phone app, and begin the configuration process as described in the Section [Configuration](#41-configuration-steps). In this case, the phone app will detect that the Alexa configuration is already done and skip those options.
+Once the Wi-Fi configuration is erased, the deivce will be back in the configuration mode. You can relaunch the phone app, and begin the configuration process as described in the Section [Configuration](#41-configuration-steps). In this case, the phone app will detect that the Alexa configuration is already done and skip those options.
 
-Please note that this Wi-Fi only DUT configuration mode stays enabled only for 3 minutes. After 3 minutes, the DUT will reboot and connect to the already configured Wi-Fi Access Point.
+Please note that this Wi-Fi only device configuration mode stays enabled only for 3 minutes. After 3 minutes, the device will reboot and connect to the already configured Wi-Fi Access Point.
 
 ## 6.2 Device Reset (Test Case 1.9)
 
 This test requires us to reset the device to its factory state. Please refer to the Section [Button Functions](#131-buttons), for details about how the device can be reset to factory settings.
 
-Once the device is reset, the DUT will be back in the configuration mode. You can relaunch the phone app, and begin the configuration process as described in the Section [Configuration](#41-configuration-steps).
+Once the device is reset, the device will be back in the configuration mode. You can relaunch the phone app, and begin the configuration process as described in the Section [Configuration](#41-configuration-steps).
 
 ## 6.3 Sign Out (Test Case 1.6)
 
 This test requires us to sign-out of Alexa. This can be done through the companion phone app.
 
-Ensure that the phone is within the same Wi-Fi network as the DUT. Launch the phone app and go to *Manage Devices*. A list of devices will be visible to you. Click on the DUT, and then click on Sign-out.
+Ensure that the phone is within the same Wi-Fi network as the device. Launch the phone app and go to *Manage Devices*. A list of devices will be visible to you. Click on the device, and then click on Sign-out.
 
-You can sign back in again, using the companion app using the same workflow. Ensure that the phone is within the same Wi-Fi network as the DUT. Launch the phone app and go to *Manage Devices*. A list of devices will be visible to you. Click on the DUT, and then click on Sign-in. Follow the sign-in steps to sign-in to the device.
+You can sign back in again, using the companion app using the same workflow. Ensure that the phone is within the same Wi-Fi network as the device. Launch the phone app and go to *Manage Devices*. A list of devices will be visible to you. Click on the device, and then click on Sign-in. Follow the sign-in steps to sign-in to the device.
 
 # 7. Reusing the AWS IoT MQTT connection
 
@@ -434,7 +482,7 @@ Example 2: You can implement OTA through publish and subscribe.
 
 ## 7.1 Working with MQTT
 
-You can refer to *ais_sdk/examples/amazon_alexa/main/app_aws_iot.c*. It has the skeletal code for publishing and subscribing to custom topics using the same AWS IoT MQTT connection which is being used by the Alexa SDK.
+You can refer to *esp-va-sdk/examples/amazon_alexa/main/app_aws_iot.c*. It has the skeletal code for publishing and subscribing to custom topics using the same AWS IoT MQTT connection which is being used by the Alexa SDK.
 
 The AWS IoT agent requires that the publish/subscribe interactions with AWS IoT happens in the same thread's context. This skeletal code allows you to do this with minimum hassle.
 
@@ -474,13 +522,13 @@ In the commands above:
 
 ## 7.2 Working with Thing-Shadows
 
-You can refer to *ais_sdk/examples/amazon_alexa/main/app_aws_iot.c*. It has the skeletal code for registering and updating a thing using the same AWS IoT MQTT shadow connection which is being used by the Alexa SDK.
+You can refer to *esp-va-sdk/examples/amazon_alexa/main/app_aws_iot.c*. It has the skeletal code for registering and updating a thing using the same AWS IoT MQTT shadow connection which is being used by the Alexa SDK.
 
 The AWS IoT agent requires that the registering and updating interactions with AWS IoT happens in the same thread's context. This skeletal code allows you to do this with minimum hassle.
 
-Firstly make sure you are calling *ais_shadow_init()* instead of *ais_mqtt_init()* from *ais_sdk/examples/amazon_alexa/main/app_main.c*.
+Firstly make sure you are calling *ais_shadow_init()* instead of *ais_mqtt_init()* from *esp-va-sdk/examples/amazon_alexa/main/app_main.c*.
 
-You can also change the 'thing_name' in *ais_sdk/examples/amazon_alexa/main/app_aws_iot.h*
+You can also change the 'thing_name' in *esp-va-sdk/examples/amazon_alexa/main/app_aws_iot.h*
 
 ### 7.2.1 Registering delta
 
@@ -527,9 +575,9 @@ The SDK is so architected that it is quite easy to rebuild the SDK for
 your board with a minimal set of changes to the core.
 
 *   The SDK build system takes a parameter *AUDIO_BOARD_PATH*, this parameter can be changed to build the SDK for a different board.
-*   The *AUDIO_BOARD_PATH* directory should contain a file *audio_board.mk*, that includes the correct board specific drivers for your board.
+*   The *AUDIO_BOARD_PATH* directory should contain a file *audio_board.cmake*, that includes the correct board specific drivers for your board.
     *   These drivers typically include the LED driver, the button handling code, and the audio codec used for playback.
-    *   The *audio_board.mk* file should also include an IPC_DRV_PATH that includes the path to the DSP Driver.
+    *   The *audio_board.cmake* file should also include an IPC_DRV_PATH that includes the path to the DSP Driver.
 
 ## 8.1 LED
 
@@ -548,25 +596,13 @@ You can replace the current LED driver with your own LED driver. The LEDs are dr
 
 When you write your LED driver, you should take care to implement the *va_led_set_pwm()* function as described above. Once implemented it gets plugged into the SDK's LED logic.
 
-The LED driver should be initialised within the *va_board_led_init()* function in your board support package.
+The LED driver should be initialised within the *va_board_led_init()* function in your audio_board.
 
 ### 8.1.2 Changing the LED Pattern (Standard Patterns)
 
-Out of the box, the SDK supports 3 standard Alexa LED patterns: single, radial-12 and linear-5. These LED patterns are imported from Alexa's standard resource package. You can switch the LED pattern by calling the appropriate initialisation function in the *va_board_led_init()* function in your audio board support package.
+Out of the box, the SDK supports the LED patterns for configurations: single, radial_12 and linear_5. The LED patterns for Alexa are imported from Alexa's standard resource package. You can switch the LED pattern by changing the *LED_PATTERN_PATH* appropriately in your *audio_board.cmake* file.
 
-The typical implementation of *va_board_led_init()* function will be:
-```
-esp_err_t va_board_led_init()
-{
-    va_led_config_t *ab_led_conf = NULL;
-    led_radial12_init(&ab_led_conf);
-    my_led_driver_init();
-    va_led_init((va_led_config_t *)ab_led_conf);
-    return ESP_OK;
-}
-```
-
-The call to *led_radial12_init()* as can be seen above, can be replaced with *led_linear5_init()* or *led_single_init()* to pick up the appropriate LED pattern. Finally this configuration is passed to the *va_led_init()* function which plugs into the SDK's LED handling module.
+The selected pattern will be initialised in *va_board_led_init()* by calling the *led_pattern_init()* API for that pattern and then passed to *va_led_init()* which plugs into the SDK's LED handling module.
 
 ### 8.1.3 Changing the LED Pattern (Custom Patterns)
 
@@ -574,17 +610,17 @@ Note: Please make sure your custom LED patterns will pass Alexa certification be
 
 You can completely define your own LED pattern.
 
-*   One pattern is a series of 12 RGB values, along with an initial delay, and a loop-count (va_led_specs_t)
-*   One event, say listening state, can have a number of these patterns (va_led_config_t) one after the other
+*   One LED state is a series of 12 RGB values, along with an initial delay, and a loop-count (va_led_specs_t)
+*   One event, say listening state, can have a number of these LED states (va_led_config_t) one after the other to create a pattern
 *   You have to define such patterns for all the events supported in the system, listening state, speaking state, alert state, etc.
 
-The best way to get started here is to look at the *components/misc/led_single.c* that defines the pattern for a single LED.
+The best way to get started here is to look at the *components/audio_hal/led_pattern/linear_5/aia/led_pattern.c* that defines the pattern for 5 linear LEDs.
 
-Once this pattern is defined, use this pattern in the *va_board_led_init()* function as defined in the subsection above.
+Once this pattern is defined, use this pattern as defined in the subsection above.
 
 ## 8.2 Button
 
-The SDK supports buttons connected through ADC using a resistor divider circuit. The button configurations can be done in the *va_board_button_init()* function in your audio board support package.
+The SDK supports buttons connected through ADC using a resistor divider circuit. The button configurations can be done in the *va_board_button_init()* function in your audio_board.
 
 This function typically is defined as shown below:
 ```
@@ -594,15 +630,15 @@ esp_err_t va_board_button_init()
     ab_button_conf = (button_cfg_t *)calloc(1, sizeof(button_cfg_t));
     ab_button_conf->is_adc = true;
     ab_button_conf->va_button_adc_ch_num = ADC1_CHANNEL_3;
-    ab_button_conf->va_button_adc_val[VA_BUTTON_TAP_TO_TALK] = 600;
-    ab_button_conf->va_button_adc_val[VA_BUTTON_VOLUME_UP] = 2480;
-    ab_button_conf->va_button_adc_val[VA_BUTTON_VOLUME_DOWN] = 1830;
-    ab_button_conf->va_button_adc_val[VA_BUTTON_VAL_IDLE] = 2700;
-    ab_button_conf->va_button_adc_val[VA_BUTTON_MIC_MUTE] = 1230;
-    ab_button_conf->va_button_adc_val[VA_BUTTON_FACTORY_RST] = 1530;
+    ab_button_conf->va_button_adc_val[VA_BUTTON_TAP_TO_TALK] = 610;
+    ab_button_conf->va_button_adc_val[VA_BUTTON_VOLUME_UP] = -1;
+    ab_button_conf->va_button_adc_val[VA_BUTTON_VOLUME_DOWN] = -1;
+    ab_button_conf->va_button_adc_val[VA_BUTTON_VAL_IDLE] = 3100;
+    ab_button_conf->va_button_adc_val[VA_BUTTON_MIC_MUTE] = 1860;
+    ab_button_conf->va_button_adc_val[VA_BUTTON_FACTORY_RST] = 520;
     ab_button_conf->va_button_adc_val[VA_BUTTON_CUSTOM_1] = -1;
     ab_button_conf->va_button_adc_val[VA_BUTTON_CUSTOM_2] = -1;
-    ab_button_conf->tolerance = 80;
+    ab_button_conf->tolerance = 45;
     va_button_init(ab_button_conf, but_cb_reg_handlr);
     return ESP_OK;
 }
@@ -616,7 +652,7 @@ The voltage values that are observed for the various button press events are ini
 
 Espressif has production-ready drivers for a known set of Audio Codecs that we support out of the box. Please reach out to your Espressif representative to get a list of these devices and the corresponding driver. Once you have the driver, you can rebuild the SDK by
 
-*   Modifying your *audio_board.mk* file to point to the appropriate audio codec driver
+*   Modifying your *audio_board.cmake* file to point to the appropriate audio codec driver
 
 ### 8.3.2 Writing your own Audio Codec Driver
 
@@ -625,15 +661,85 @@ If the audio codec, that you wish to use, is not part of Espressif's supported l
 *   Initialise the audio codec with the appropriate configuration. It should also setup the volume to a default volume.
 *   Initialise the list of function pointers within the *media_hal* structure to point to the driver's implementation of those functions. These functions typically include functions for controlling the volume setting mute/unmute, I2S and power up/down configurations.
 
-# 9. Production Considerations
+## 8.4 DSP Driver
 
-## 9.1 Over-the-air Updates (OTA)
+### 8.4.1 Using Another DSP Driver
+
+Espressif has production-ready drivers for a known set of DSP SoCs that we have partnered with. Please reach out to your Espressif sales representative to get access to these drivers.
+
+Once you have the access to these drivers, you can rebuild the SDK by modifying your *audio_board.cmake* file to point to the appropriate DSP driver.
+
+### 8.4.2 Writing your own DSP Driver
+
+If the DSP that you wish to use is not already supported by Espressif, you can write the DSP driver yourself. A reference hollow DSP driver is available within the SDK at *components/audio_hal/dsp_driver/hollow_dsp/*. This includes all the skeletal code and the empty APIs that the DSP driver is supposed to implement to plug into the SDK.
+
+As you write the driver, please update the *audio_board.cmake* file to point to your DSP driver instead of the original one.
+
+# 9. Integrating other components
+
+## 9.1 RainMaker
+
+### 9.1.1 Environment Setup
+
+Additional setup that needs to be done for integrating [ESP RainMaker](https://rainmaker.espressif.com/):
+
+*   Get the repository:
+    ```
+    $ git clone https://github.com/espressif/esp-rainmaker.git
+    ```
+*   Comment the 2 lines in esp-rainmaker/components/led_strip/src/led_strip_rmt_ws2812.c:148
+*   Follow this to setup the RainMaker CLI: https://rainmaker.espressif.com/docs/cli-setup.html
+*   Setting cloud_agent:
+    ```
+    $ export CLOUD_AGENT_PATH=/path/to/esp-rainmaker
+    ```
+*   Menuconfig changes:
+    ```
+    $ idf.py menuconfig
+
+    -> voice assistant configuration -> Enable cloud support -> enable this
+    ```
+
+### 9.1.2 Device Setup
+
+[Claiming](https://rainmaker.espressif.com/docs/claiming.html) needs to be performed on the device for getting the certificates required by RainMaker:
+*   ```
+    cd /path/to/esp-rainmaker/cli
+    ```
+*   Login into your account with the CLI command:
+    ```
+    ./rainmaker.py login
+    ```
+*   Connect your device and run the claiminng command:
+    ```
+    ./rainmaker.py claim --addr 0x16000 $ESPPORT
+    ```
+
+### 9.1.3 Device Provisioning
+
+Instead of using the ESP Alexa app, Use the RainMaker apps with Alexa integration:
+
+**iOS**: Coming soon <br>
+**Android**: [Android app]()
+
+*   Launch the app and sign-in.
+*   Click on add device and scan the QR code complete the Wi-Fi setup.
+*   After that you will be asked to Sign in with Amazon.
+*   The phone app will verify and complete the setup after that.
+
+### 9.1.4 Customisation
+
+To customise your own device, you can edit the file examples/common/esp_cloud_rainmaker.c. You can check the examples in ESP RainMaker for some more device examples.
+
+# 10. Production Considerations
+
+## 10.1 Over-the-air Updates (OTA)
 
 ESP-IDF has a component for OTA from any URL. More information and details about implementing can be found here: [esp_https_ota](https://docs.espressif.com/projects/esp-idf/en/release-v3.2/api-reference/system/esp_https_ota.html#esp-https-ota).
 
-## 9.2 Manufacturing
+## 10.2 Manufacturing
 
-### 9.2.1 Mass Manufacturing Utility
+### 10.2.1 Mass Manufacturing Utility
 
 AWS IoT operations require that all devices have a unique certificate and key pair programmed on each device. This is used for authentication with the AWS IoT cloud service. These are generally programmed in factory NVS partitions that are unique per device.
 
@@ -641,15 +747,15 @@ ESP-IDF provides a utility to create instances of factory NVS partition images 
 
 Details about using the mass manufacturing utility can be found here: [mass_manufacturing](https://docs.espressif.com/projects/esp-idf/en/latest/api-reference/storage/mass_mfg.html).
 
-### 9.2.2 Pre-Provisioned Modules
+### 10.2.2 Pre-Provisioned Modules
 
 ESP32 modules can be pre-flashed with private key and device certificates (i.e the factory NVS partition) during manufacturing itself and then be shipped to you. These device certificates are signed by your Certificate Authority (CA). When you register this CA in your cloud, all the devices can connect to the cloud, out of the box. This saves you the overhead of securely generating, encrypting and then programming the certificates into the device at your end. Pre-provisioning is an optional service which Espressif provides.
 
 Please contact your Espressif contact person for more information.
 
-## 9.3 Security
+## 10.3 Security
 
-### 9.3.1 Secure Boot
+### 10.3.1 Secure Boot
 
 Secure boot ensures that only trusted code runs on the device.
 
@@ -657,7 +763,7 @@ ESP32 supports RSA based secure boot scheme whereby the bootROM verifies the sof
 
 Details about implementing the secure boot can be found here: [secure_boot](https://docs.espressif.com/projects/esp-idf/en/latest/security/secure-boot.html).
 
-### 9.3.2 Flash Encryption
+### 10.3.2 Flash Encryption
 
 Flash encryption prevents the plain-text reading of the flash contents.
 
@@ -665,7 +771,7 @@ ESP32 supports AES-256 based flash encryption scheme. The ESP32 flash controller
 
 Details about implementing the flash encryption can be found here: [flash_encryption](https://docs.espressif.com/projects/esp-idf/en/latest/security/flash-encryption.html).
 
-### 9.3.3 NVS Encryption
+### 10.3.3 NVS Encryption
 
 For the manufacturing data that needs to be stored on the device in the NVS format, ESP-IDF provides the NVS image creation utility which allows the encryption of NVS partition on the host using a randomly generated (per device unique) or pre-generated (common for a batch) NVS encryption key.
 
@@ -673,24 +779,9 @@ A separate flash partition is used for storing the NVS encryption keys. This fla
 
 Details about implementing the NVS encryption can be found here: [nvs_encryption](https://docs.espressif.com/projects/esp-idf/en/latest/api-reference/storage/nvs_flash.html#nvs-encryption).
 
-# A1 Appendix Changing the DSP SoC
+# A1 Appendix FAQs
 
-## A1.1 Using Another DSP Driver
-
-Espressif has production-ready drivers for a known set of DSP SoCs that we have partnered with. Please reach out to your Espressif sales representative to get access to these drivers. Once you have the access to these drivers, you can rebuild the SDK by
-
-*   either modifying your *AUDIO_BOARD_PATH* to point to the Audio Board with this new DSP (in case you are using Espressif's standard Development Kit)
-*   or modifying your *audio_board.mk* file to point to the appropriate DSP driver (in case you have your own customised board, and hence a customised *audio_board.mk* file)
-
-## A1.2 Writing your own DSP Driver
-
-If the DSP that you wish to use is not already supported by Espressif, you can write the DSP driver yourself. A reference hollow DSP driver is available within the SDK at *board_support_pkgs/hollow-dsp/*. This includes all the skeletal code and the empty APIs that the DSP driver is supposed to implement to plug into the SDK.
-
-As you write the driver, please update the *audio_board.mk* file to point to your DSP driver instead of the original one.
-
-# A2 Appendix FAQs
-
-## A2.1 Compilation errors
+## A1.1 Compilation errors
 
 I cannot build the application:
 
@@ -698,10 +789,10 @@ I cannot build the application:
 *   Make sure you have the correct AUDIO_BOARD_PATH selected for your board.
 *   Delete the build/ directory and also sdkconfig and sdkconfig.old and then build again.
 *   If you are still facing issues, reproduce the issue on the default example and then contact Espressif for help. Please make sure to share these:
-    *   The ais_sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
+    *   The esp-va-sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
     *   The complete build logs.
 
-## A2.2 Device setup using the Mobile app
+## A1.2 Device setup using the Mobile app
 
 I cannot *Add a new device* through the phone app:
 
@@ -714,7 +805,7 @@ I cannot *Add a new device* through the phone app:
     *   Mobile App version.
     *   Mobile Phone model and the Android version or any skin it is running.
     *   Complete device logs taken over UART.
-    *   The ais_sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
+    *   The esp-va-sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
 
 I cannot *Manage device* through the phone app:
 
@@ -726,9 +817,9 @@ I cannot *Manage device* through the phone app:
     *   Mobile App version.
     *   Mobile Phone model and the Android version or any skin it is running.
     *   Complete device logs taken over UART.
-    *   The ais_sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
+    *   The esp-va-sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
 
-## A2.3 Device crashing
+## A1.3 Device crashing
 
 My device is crashing:
 
@@ -741,9 +832,9 @@ My device is crashing:
     *   Complete device logs (from device boot-up) taken over UART.
     *   <voice_assistant>.elf file from the build/ directory.
     *   If you have gdb enabled, run the command 'backtrace' and share the output of gdb too.
-    *   The ais_sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
+    *   The esp-va-sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
 
-## A2.4 Device not crashed but not responding
+## A1.4 Device not crashed but not responding
 
 My device is not responding to audio queries:
 
@@ -754,13 +845,13 @@ My device is not responding to audio queries:
     *   The steps you followed to reproduce the issue.
     *   Complete device logs taken over UART.
     *   <voice_assistant>.elf file from the build/ directory.
-    *   The ais_sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
+    *   The esp-va-sdk and esp-idf branch you are using and the AUDIO_BOARD_PATH that you have set.
 
-## A2.5 Migrating to your own AWS account
+## A1.5 Migrating to your own AWS account
 
 Where does it ask to link the product ID with the AWS Account?
 
-*   While creating a new product, you will be asked 'Is this device associated with one or more AWS IoT Core Accounts?'. When you select 'Yes', you will be asked to enter the AWS Account ID 'Please provide your AWS Account ID[s] (comma separated)?'.
+*   While creating a new product, you will be asked 'Is this device associated with one or more AWS IoT Core Accounts?'. When you select 'Yes', you will be asked to enter the AWS Account ID 'Please provide your AWS Account ID(s) (comma separated)?'.
 
 How to change the phone app for the new product ID?
 

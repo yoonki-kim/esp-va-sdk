@@ -115,7 +115,7 @@ static int http_response_read_and_parse(httpc_conn_t *httpc, char *buf, size_t b
          * We should blindly return -1 from here to able to break the `http_response_recv` loop!?
          * This is unlikely to hit but this is the prime suspect for random `http_reader` WDT triggers.
          */
-        ESP_LOGE(TAG, "Peer connection closed...data incomplete");
+        ESP_LOGE(TAG, "data_read 0 sent to http_parser_execute and parser didn't set ESP_HTTP_RESP_BDY_RECEIVED! Current status is = %d", httpc->state);
         return -1;
     }
     return 0;

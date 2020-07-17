@@ -9,10 +9,6 @@
 #include <va_mem_utils.h>
 #include "app_aws_iot.h"
 
-#ifdef CONFIG_ALEXA_ENABLE_OTA
-#include "app_ota.h"
-#endif
-
 /* NOTE: By default MQTT is used, thing shadow is not used.
 To use Thing shadow, set APP_AWS_IOT_USE_SHADOW to 1. Then you can use the APIs below.
 Also make sure you call ais_shadow_init() instead of ais_mqtt_init() from app_main.c. */
@@ -259,8 +255,4 @@ void app_aws_iot_callback()
         }
     }
 #endif /* APP_AWS_IOT_USE_SHADOW */
-
-#ifdef CONFIG_ALEXA_ENABLE_OTA
-    app_ota_cloud_agent_callback();
-#endif /* CONFIG_ALEXA_ENABLE_OTA */
 }

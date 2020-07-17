@@ -31,10 +31,10 @@ config ALEXA_AWS_ENDPOINT
     help
         AWS Endpoint to which the device should connect.
 
-config ALEXA_ENABLE_OTA
-    bool "Enable OTA support"
+config ALEXA_ENABLE_CLOUD
+    bool "Enable cloud support"
     default n
     help
-        Enables OTA support with cloud agent.
+        Enables app_cloud.h APIs for linking with a cloud for command and control. Default implementation of ESP RainMaker is available, and can be modified to any other such cloud.
 
 endmenu

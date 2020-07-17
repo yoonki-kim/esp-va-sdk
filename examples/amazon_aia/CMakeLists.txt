@@ -5,8 +5,10 @@
 # in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
+set(PROJECT_VER "1.0")
 
 set(VOICE_ASSISTANT "aia" CACHE INTERNAL "")
+set(LED_PATTERN_TYPE "alexa" CACHE INTERNAL "")
 
 if((NOT(DEFINED AUDIO_BOARD_PATH)) AND (NOT(DEFINED ENV{AUDIO_BOARD_PATH})))
     MESSAGE(STATUS "AUDIO_BOARD_PATH not defined")
@@ -31,7 +33,7 @@ if(DEFINED PARTITIONS_4MB_FLASH_CSV)
     set(ENV{PARTITION_TABLE_CSV_PATH} CMAKE_CURRENT_SOURCE_DIR/partitions_4mb_flash.csv)
 endif()
 
-set(EXTRA_COMPONENT_DIRS ../../components ${AUDIO_BOARD_PATH}/../../../ ${AWS_IOT_PATH}/ )
+set(EXTRA_COMPONENT_DIRS ../../components ../common ${AUDIO_BOARD_PATH}/../../../ ${AWS_IOT_PATH}/ )
 
 if(DEFINED CLOUD_AGENT_PATH)
     list(APPEND EXTRA_COMPONENT_DIRS ${CLOUD_AGENT_PATH}/components)

@@ -7,7 +7,7 @@
 #define UUID_VERSION_VALUE  4<<4
 #define UUID_VARIANT_VALUE  2<<6
 
-const char *generateUUID() {
+char *generateUUID() {
     /* Format for UUID is xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
     /* With 7th-bit of 3rd octet set to signify truely random version of UUID and
      * 8th-bit of 4th octet set to signify variant value */

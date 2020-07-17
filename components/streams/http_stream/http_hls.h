@@ -42,6 +42,8 @@ typedef enum {
     MP3_URL,
     OPUS_URL,
     WAV_URL,
+    AMR_URL,
+    AMR_WB_URL,
 } http_hls_mime_type_t;
 
 typedef struct {

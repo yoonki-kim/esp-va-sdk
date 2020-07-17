@@ -26,7 +26,7 @@
 #define _HTTP_PLAYLIST_H_
 
 #include <unistd.h>
-#include <rom/queue.h>
+#include <sys/queue.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,7 +55,7 @@ typedef struct http_playlist {
 
 /**
  * Add new entry to playlist.
- * 
+ *
  * Function checks if the url is already present in playlist and inserts if not present.
  * playlist: playlist to which entry is to be added.
  * line    : uri to be inserted in playlist

@@ -6,6 +6,7 @@
 #include <esp_wifi.h>
 #include <esp_log.h>
 #include <esp_event_loop.h>
+#include <esp_sleep.h>
 #include <esp_pm.h>
 #include <nvs_flash.h>
 
@@ -17,6 +18,7 @@
 #include <alexa_local_config.h>
 
 #include <va_mem_utils.h>
+#include <va_ui.h>
 #include <scli.h>
 #include <va_diag_cli.h>
 #include <wifi_cli.h>
@@ -25,94 +27,21 @@
 #include <auth_delegate.h>
 #include <speech_recognizer.h>
 #include "va_board.h"
+#include <app_wifi.h>
+#include <app_prov.h>
 #include "app_auth.h"
-#include "app_wifi.h"
 #include "app_aws_iot.h"
 
-#ifdef CONFIG_ALEXA_ENABLE_OTA
-#include "app_ota.h"
-#endif
+#ifdef CONFIG_ALEXA_ENABLE_CLOUD
+#include <app_cloud.h>
+#endif /* CONFIG_ALEXA_ENABLE_CLOUD */
 
 #define SERVICENAME_SSID_PREFIX  "ESP-Alexa-"
 #define MAX_CLIENT_ID_LEN (12 + 1) /* 12 bytes of mac address + 1 byte of \0 */
 
 static const char *TAG = "[app_main]";
 
-static EventGroupHandle_t cm_event_group;
-const int CONNECTED_BIT = BIT0;
-const int PROV_DONE_BIT = BIT1;
-
-static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
-{
-    if (event_base == WIFI_EVENT) {
-        if (event_id == WIFI_EVENT_STA_START) {
-            esp_wifi_connect();
-            esp_wifi_set_storage(WIFI_STORAGE_FLASH);
-        } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
-            app_wifi_stop_timeout_timer();
-            printf("%s: Disconnected. Connecting to the AP again\n", TAG);
-            esp_wifi_connect();
-        }
-    } else if (event_base == IP_EVENT) {
-        if (event_id == IP_EVENT_STA_GOT_IP) {
-            ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-            app_wifi_stop_timeout_timer();
-            printf("%s: Connected with IP Address: %s\n", TAG, ip4addr_ntoa(&event->ip_info.ip));
-            xEventGroupSetBits(cm_event_group, CONNECTED_BIT);
-        }
-    }
-}
-
-static void wifi_init_sta()
-{
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK(esp_wifi_start() );
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-}
-
-void app_prov_done_cb()
-{
-    xEventGroupSetBits(cm_event_group, PROV_DONE_BIT);
-}
-
-/* Event handler for catching provisioning manager events */
-static void app_wifi_prov_event_handler(void *user_data, wifi_prov_cb_event_t event, void *event_data)
-{
-    wifi_sta_config_t *wifi_sta_cfg = NULL;
-    wifi_prov_sta_fail_reason_t *reason = NULL;
-    size_t ssid_len;
-    switch (event) {
-        case WIFI_PROV_START:
-            ESP_LOGI(TAG, "Provisioning started");
-            break;
-
-        case WIFI_PROV_CRED_RECV:
-            wifi_sta_cfg = (wifi_sta_config_t *)event_data;
-            ssid_len = strnlen((const char *)wifi_sta_cfg->ssid, sizeof(wifi_sta_cfg->ssid));
-            ESP_LOGI(TAG, "Received Wi-Fi credentials:\n\tSSID: %.*s\n\tPassword: %s", ssid_len, (const char *)wifi_sta_cfg->ssid, (const char *)wifi_sta_cfg->password);
-            break;
-
-        case WIFI_PROV_CRED_FAIL:
-            reason = (wifi_prov_sta_fail_reason_t *)event_data;
-            ESP_LOGE(TAG, "Provisioning failed!\n\tReason: %s\n\tPlease reset to factory and retry provisioning", (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi AP password incorrect" : "Wi-Fi AP not found");
-            break;
-
-        case WIFI_PROV_CRED_SUCCESS:
-            ESP_LOGI(TAG, "Provisioning successful");
-            break;
-
-        case WIFI_PROV_END:
-            ESP_LOGI(TAG, "Provisioning stopped");
-            wifi_prov_mgr_deinit();
-            app_prov_done_cb();
-            break;
-
-        default:
-            break;
-    }
-}
-
-#define FACTORY_PARTITION_NAME    "fctry"
+#define FACTORY_PARTITION_NAME    "fctry_aia"
 #define DEVICE_NAMESPACE         "device"
 
 char *app_nvs_alloc_and_get_str(const char *key)
@@ -137,42 +66,11 @@ char *app_nvs_alloc_and_get_str(const char *key)
     return value;
 }
 
-void app_main()
+void app_get_device_config(aia_config_t *va_cfg)
 {
-    ESP_LOGI(TAG, "==== Voice Assistant SDK version: %s ====", va_get_sdk_version());
-
-    amazon_config_t *amazon_cfg = va_mem_alloc(sizeof(amazon_config_t), VA_MEM_EXTERNAL);
-    if (!amazon_cfg) {
-        ESP_LOGE(TAG, "Failed to alloc voice assistant config");
-        abort();
-    }
-    amazon_cfg->product_id = CONFIG_ALEXA_PRODUCT_ID;
-
-    /* This will never be freed */
-    aia_config_t *va_cfg = va_mem_alloc(sizeof(aia_config_t), VA_MEM_EXTERNAL);
-
-    if (!va_cfg) {
-        ESP_LOGE(TAG, "Failed to alloc voice assistant config");
-        abort();
-    }
-
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( ret );
-
-    tcpip_adapter_init();
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    ret = nvs_flash_init_partition(FACTORY_PARTITION_NAME);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "NVS Flash init failed");
+    if (nvs_flash_init_partition(FACTORY_PARTITION_NAME) != ESP_OK) {
+        ESP_LOGE(TAG, "NVS Flash factory partition init failed.");
+        return;
     }
 
     va_cfg->device_config.aws_root_ca_pem_cert = app_nvs_alloc_and_get_str("server_cert");
@@ -204,91 +102,77 @@ void app_main()
     /* thing_name is only used in case of thing shadow. */
     app_aws_iot_set_thing_name(va_cfg->device_config.client_id);    /* Setting thing_name same as client_id itself. */
     va_cfg->device_config.thing_name = app_aws_iot_get_thing_name();
+}
+
+void app_main()
+{
+    ESP_LOGI(TAG, "==== Voice Assistant SDK version: %s ====", va_get_sdk_version());
+
+    amazon_config_t *amazon_cfg = va_mem_alloc(sizeof(amazon_config_t), VA_MEM_EXTERNAL);
+    if (!amazon_cfg) {
+        ESP_LOGE(TAG, "Failed to alloc voice assistant config");
+        abort();
+    }
+    amazon_cfg->product_id = CONFIG_ALEXA_PRODUCT_ID;
+
+    /* This will never be freed */
+    aia_config_t *va_cfg = va_mem_alloc(sizeof(aia_config_t), VA_MEM_EXTERNAL);
+    if (!va_cfg) {
+        ESP_LOGE(TAG, "Failed to alloc voice assistant config");
+        abort();
+    }
+
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK( ret );
+
+    app_wifi_init();
+    app_prov_init();
+    app_wifi_init_wifi_reset();
+    app_get_device_config(va_cfg);
 
     va_board_init(); /* Initialize media_hal, media_hal_playback, board buttons and led patters */
 
     scli_init(); /* Initialize CLI */
     va_diag_register_cli(); /* Add diagnostic functions to CLI */
-
     wifi_register_cli();
-    app_wifi_reset_to_prov_init();
     app_auth_register_cli();
-    cm_event_group = xEventGroupCreate();
 
     printf("\r");       // To remove a garbage print ">>"
     auth_delegate_init(alexa_signin_handler, alexa_signout_handler);
 
-    wifi_prov_mgr_config_t config = {
-        .scheme = wifi_prov_scheme_ble,
-        .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM,
-        .app_event_handler = {
-            .event_cb = app_wifi_prov_event_handler,
-            .user_data = NULL
-        }
-    };
-
-    ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
-
-    bool provisioned = false;
-    if (wifi_prov_mgr_is_provisioned(&provisioned) != ESP_OK) {
-        ESP_LOGE(TAG, "Error getting device provisioning state");
-        abort();
-    }
-    if (app_wifi_get_reset_to_prov() > 0) {
-        app_wifi_start_timeout_timer();
-        provisioned = false;
-        app_wifi_unset_reset_to_prov();
-        esp_wifi_set_storage(WIFI_STORAGE_RAM);
-    }
+#ifdef CONFIG_ALEXA_ENABLE_CLOUD
+    app_cloud_init();
+#endif /* CONFIG_ALEXA_ENABLE_CLOUD */
 
     char service_name[20];
     uint8_t mac[6];
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     snprintf(service_name, sizeof(service_name), "%s%02X%02X", SERVICENAME_SSID_PREFIX, mac[4], mac[5]);
 
-    if (!provisioned) {
-        va_led_set(LED_RESET);
-        printf("%s: Starting provisioning\n", TAG);
-        uint8_t custom_service_uuid[16] = {
-            /* This is a random uuid. This can be modified if you want to change the BLE uuid. */
-            /* 12th and 13th bit will be replaced by internal bits. */
-            0x21, 0x43, 0x65, 0x87, 0x09, 0xba, 0xdc, 0xfe,
-            0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12,
-        };
-        wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
+    app_wifi_check_wifi_reset();
 
-        wifi_prov_security_t security = WIFI_PROV_SECURITY_1;
-        const char *pop = CONFIG_VOICE_ASSISTANT_POP;
-        const char *service_key = NULL;
-
-        alexa_wifi_prov_event_handler(ALEXA_PROV_EVENT_CREATE_ENDPOINT, amazon_cfg);
-        if (wifi_prov_mgr_start_provisioning(security, pop, service_name, service_key) != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to start provisioning");
-        }
-        alexa_wifi_prov_event_handler(ALEXA_PROV_EVENT_REGISTER_ENDPOINT, amazon_cfg);
-        printf("%s: Provisioning started with: \n\tservice name: %s \n\tservice key: %s\n\tproof of possession (pop): %s\n", TAG, service_name, service_key ? service_key : "", pop);
+    if (!app_prov_get_provisioning_status()) {
+        va_ui_set_state(VA_UI_RESET);
+        app_prov_start_provisionig(service_name, amazon_cfg);
+        app_prov_wait_for_provisioning();
+        va_ui_set_state(VA_UI_CAN_START);
     } else {
-        va_led_set(VA_CAN_START);
+        va_ui_set_state(VA_UI_CAN_START);
         ESP_LOGI(TAG, "Already provisioned, starting station");
-        wifi_prov_mgr_deinit();
-        app_prov_done_cb();
-        wifi_init_sta();
+        app_prov_stop_provisioning();
+        app_wifi_start_station();
     }
 
-    xEventGroupWaitBits(cm_event_group, CONNECTED_BIT | PROV_DONE_BIT, false, true, portMAX_DELAY);
-
-    if (!provisioned) {
-        va_led_set(VA_CAN_START);
-    }
+    app_wifi_wait_for_connection();
 
     ret = alexa_local_config_start(amazon_cfg, service_name);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start local SSDP instance. Some features might not work.");
     }
-
-#ifdef CONFIG_ALEXA_ENABLE_OTA
-    app_ota_init();
-#endif
 
     ret = ais_mqtt_init(va_cfg, app_aws_iot_callback);
 
@@ -297,6 +181,24 @@ void app_main()
     }
     /* This is a blocking call */
     va_dsp_init(speech_recognizer_recognize, speech_recognizer_record);
-    /* This is only supported with minimum flash size of 8MB. */
+
+#ifdef CONFIG_PM_ENABLE
+    int xtal_freq = (int) rtc_clk_xtal_freq_get();
+    esp_pm_config_esp32_t pm_config = {
+            .max_freq_mhz = CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ,
+            .min_freq_mhz = xtal_freq,
+#if CONFIG_FREERTOS_USE_TICKLESS_IDLE
+            .light_sleep_enable = true
+#endif
+    };
+
+    ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+    gpio_wakeup_enable(GPIO_NUM_36, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
+#ifdef CONFIG_ULP_COPROC_ENABLED
+    ESP_ERROR_CHECK(esp_sleep_enable_ulp_wakeup());
+#endif
+    //esp_pm_dump_locks(stdout);
+#endif
     return;
 }

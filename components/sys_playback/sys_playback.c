@@ -14,12 +14,12 @@
 #include <esp_audio_mem.h>
 #include <esp_downmix.h>
 
-#define PB_DEFAULT_STACK_SIZE   (4 * 1024)
-#define PB_DOWNMIX_STACK_SIZE   (7 * 1024)
+#define PB_DEFAULT_STACK_SIZE   (3 * 1024)
+#define PB_DOWNMIX_STACK_SIZE   (4 * 1024)
 #define PB_TASK_PRIORITY        5
 #define PB_DOWNMIX_PRIORITY     5
 #define PB_DEFAULT_BUF_SIZE     512
-#define PB_BUFFER_SIZE          (4 * 1024)
+#define PB_BUFFER_SIZE          (12 * 512) /* 12x can handle 8k/1 --> 48k/2 */
 #define OUT_SAMPLING_RATE       48000
 
 static const char *TAG = "[sys_playback]";
@@ -435,7 +435,7 @@ int sys_playback_init(sys_playback_config_t *sys_playback_cfg)
     }
 
     if (sp.downmix_support) {
-        if (xTaskCreate(sys_playback_downmix_consumer_task, "sys_playback_downmix_writer", PB_DEFAULT_STACK_SIZE, NULL, PB_TASK_PRIORITY, NULL) != pdPASS) {
+        if (xTaskCreate(sys_playback_downmix_consumer_task, "sys_pb_downmix_writer", PB_DEFAULT_STACK_SIZE, NULL, PB_TASK_PRIORITY, NULL) != pdPASS) {
             ESP_LOGE(TAG, "Error creating sys_playback_downmix_consumer_task task! Downmixing will be disabled...");
             /* Downmix cleanups */
             sys_playback_downmix_deinit();
@@ -443,7 +443,7 @@ int sys_playback_init(sys_playback_config_t *sys_playback_cfg)
         }
     }
 
-    if (xTaskCreate(sys_playback_task, "sys_playback_task", PB_DOWNMIX_STACK_SIZE, NULL, PB_DOWNMIX_PRIORITY, NULL) != pdPASS) {
+    if (xTaskCreate(sys_playback_task, "sys_pb_task", PB_DOWNMIX_STACK_SIZE, NULL, PB_DOWNMIX_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Error creating sys_playback_task");
         goto sp_init_error;
     }

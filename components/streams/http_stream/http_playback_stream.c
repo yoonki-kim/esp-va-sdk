@@ -121,9 +121,15 @@ static ssize_t http_read(void *s, void *buf, ssize_t len)
         printf("%s: [http_response_recv]: returning EAGAIN\n", TAG);
         return 0;
     }
-    if (data_read <= 0) {
+    while (data_read <= 0) {
+        /* End of data OR error */
         if (bstream->hls_cfg.media_playlist) {
             if (data_read < 0) {
+                if (!bstream->handle) {
+                    ESP_LOGW(TAG, "Connection was failed! Internet issues? Stopping playback...");
+                    return -1;
+                }
+
                 /**
                  * If we get an error and we have other segments to be played from playlist.
                  * We can at least play next segments.
@@ -137,10 +143,20 @@ static ssize_t http_read(void *s, void *buf, ssize_t len)
                     return -1; /* Treat failure as end of data anyway. */
                 }
             }
+            /* Read from next segment from playlist */
             data_read = http_playlist_read_data(bstream, buf, len);
             if (data_read == -EAGAIN) {
                 ESP_LOGI(TAG, "[http_playlist_read_data]: returning EAGAIN");
                 return 0;
+            } else if (data_read == 0) {
+                /**
+                 * Let's just keep this print for now to know if this really was getting hit.
+                 */
+                ESP_LOGW(TAG, "data_read 0 in first attempt of http_playlist_read_data. Stream will be closed!");
+                return -1; /* End of data */
+            } else if (data_read < 0) {
+                /* We will go into loop again! Hence, trying next segment */
+                ESP_LOGI(TAG, "data_read = %d", data_read);
             }
         } else {
             /* End of data */

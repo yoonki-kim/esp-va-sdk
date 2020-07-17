@@ -31,6 +31,7 @@
 #include <freertos/task.h>
 #include <esp_audio_mem.h>
 #include <esp_timer.h>
+#include "lwip/sockets.h"
 
 #include <string.h>
 
@@ -98,6 +99,54 @@ static int mem_dump_cli_handler(int argc, char *argv[])
     printf("Min. Ever Free Size\t%d\t\t%d\n",
            heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL),
            heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
+    return 0;
+}
+
+static int sock_dump_cli_handler(int argc, char *argv[])
+{
+    printf("\n");
+    int i, ret, used_sockets = 0;
+
+    struct sockaddr_in local_sock, peer_sock;
+    socklen_t local_sock_len = sizeof(struct sockaddr_in), peer_sock_len = sizeof(struct sockaddr_in);
+    char local_ip_addr[16], peer_ip_addr[16];
+	unsigned int local_port, peer_port;
+
+    int sock_type;
+    socklen_t sock_type_len;
+
+#define TOTAL_NUM_SOCKETS MEMP_NUM_NETCONN
+    printf("sock_fd\tprotocol\tlocal_addr\t\tpeer_addr\n");
+    for (i = LWIP_SOCKET_OFFSET; i < LWIP_SOCKET_OFFSET + TOTAL_NUM_SOCKETS; i++) {
+        memset(&local_sock, 0, sizeof(struct sockaddr_in));
+        memset(&peer_sock, 0, sizeof(struct sockaddr_in));
+        local_sock_len = sizeof(struct sockaddr);
+        peer_sock_len = sizeof(struct sockaddr);
+        memset(local_ip_addr, 0, sizeof(local_ip_addr));
+        memset(peer_ip_addr, 0, sizeof(peer_ip_addr));
+        local_port = 0;
+        peer_port = 0;
+        sock_type = 0;
+        sock_type_len = sizeof(int);
+
+        ret = getsockname(i, (struct sockaddr *)&local_sock, &local_sock_len);
+        if (ret >= 0) {
+            used_sockets++;
+            inet_ntop(AF_INET, &local_sock.sin_addr, local_ip_addr, sizeof(local_ip_addr));
+            local_port = ntohs(local_sock.sin_port);
+            getsockopt(i, SOL_SOCKET, SO_TYPE, &sock_type, &sock_type_len);
+            printf("%d\t%d:%s\t%16s:%d", i, sock_type, sock_type == SOCK_STREAM ? "tcp" : sock_type == SOCK_DGRAM ? "udp" : "raw", local_ip_addr, local_port);
+
+            ret = getpeername(i, (struct sockaddr *)&peer_sock, &peer_sock_len);
+            if (ret >= 0) {
+                inet_ntop(AF_INET, &peer_sock.sin_addr, peer_ip_addr, sizeof(peer_ip_addr));
+                peer_port = ntohs(peer_sock.sin_port);
+                printf("\t%16s:%d", peer_ip_addr, peer_port);
+            }
+            printf("\n");
+        }
+    }
+    printf("Remaining sockets: %d\n", TOTAL_NUM_SOCKETS - used_sockets);
     return 0;
 }
 
@@ -197,6 +246,11 @@ static esp_console_cmd_t diag_cmds[] = {
         .command = "cpu-dump",
         .help = "",
         .func = cpu_dump_cli_handler,
+    },
+    {
+        .command = "sock-dump",
+        .help = "",
+        .func = sock_dump_cli_handler,
     },
     {
         .command = "heap-trace",

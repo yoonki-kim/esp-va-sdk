@@ -288,6 +288,10 @@ static audio_codec_type_t basic_player_codec_get_type_from_mime(http_hls_mime_ty
             return CODEC_TYPE_WAV_DECODER;
             break;
 
+        case AMR_URL:
+        case AMR_WB_URL:
+            return CODEC_TYPE_AMR_DECODER;
+
         default:
             return CODEC_TYPE_MAX;
             break;
@@ -329,6 +333,15 @@ static esp_err_t basic_player_codec_event_cb(void *arg, int event, void *data)
         case CODEC_EVENT_STOPPED:
             b->is_codec_stopped = true;
             arb_signal_writer_finished(b->codec_output_rb);
+            if (b->play_method == PLAY_FROM_URL) {
+                /**
+                 * If we for some reason get false `CODEC_EVENT_STOPPED` event, we won't be able to stop `http_stream`.
+                 * This could make next playback or current stop non-deterministic.
+                 *
+                 * It doesn't hurt to abort the http buffer at this point anyway.
+                 */
+                arb_abort(b->http_output_rb);
+            }
             break;
 
         case CODEC_EVENT_FAILED:

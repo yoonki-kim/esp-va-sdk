@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <rom/queue.h>
+#include <sys/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <audio_stream.h>

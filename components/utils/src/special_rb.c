@@ -238,7 +238,7 @@ int __srb_put_anchor(rb_handle_t handle, rb_anchor_t *anchor)
     int rc = 0;
     if (srb->read_offset >= anchor->offset) {
         /* If a reader was sleeping on rb_read() at this point, ideally the put_anchor() should wake that reader as well. */
-        ESP_LOGI(TAG, "Setting anchor at current or at a point that is already read.");
+        ESP_LOGD(TAG, "Setting anchor at current or at a point that is already read.");
         rb_wakeup_reader(srb->rb);
     }
     rc = srb_node_insert(srb, anchor);
@@ -311,7 +311,7 @@ int srb_drain(rb_handle_t handle, uint64_t drain_upto)
             }
             /* We are looping since the buffer might be full and the codec might have written half the data. So, when we read from the buffer, the codec writes the remaining data, so we need to read and flush again. */
             /* We are getting -3 which is wakeup reader on the first read */
-        } while ((ret > 0 || ret == -3) && srb->read_offset < drain_upto);
+        } while ((ret >= 0 || ret == -3) && srb->read_offset < drain_upto);
     }
     ret = srb->read_offset;
     xSemaphoreGive(srb->lock);

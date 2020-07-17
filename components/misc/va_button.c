@@ -9,9 +9,10 @@
 #include "speaker.h"
 #include <alerts.h>
 #include <tone.h>
+#include <voice_assistant.h>
 #include "va_dsp.h"
 #include "va_nvs_utils.h"
-#include "va_led.h"
+#include "va_ui.h"
 
 #define VA_BUTTON_QUEUE_LENGTH 1
 #define ESP_INTR_FLAG_DEFAULT  0
@@ -59,7 +60,7 @@ int number_of_active_alerts = 0;
 static void va_button_timer_cb(void *arg)
 {
     speaker_notify_vol_changed(set_volume);
-    va_led_set(VA_SET_VOLUME_DONE);
+    va_ui_set_state(VA_SET_VOLUME_DONE);
 }
 #endif
 
@@ -90,7 +91,7 @@ void va_button_notify_mute(bool va_btn_mute)
 {
     if(va_btn_mute) {
         mute_btn_press_flg = 3;
-        va_led_set(VA_MUTE_ENABLE);
+        va_ui_set_state(VA_MUTE_ENABLE);
     }
 }
 
@@ -153,7 +154,7 @@ static void va_button_adc_task(void *arg)
                     }
                     media_hal_set_mute(media_hal_get_handle(), 0);
                     volume_to_set = set_volume;
-                    va_led_set(VA_SET_VOLUME);
+                    va_ui_set_state(VA_SET_VOLUME);
                     media_hal_control_volume(media_hal_get_handle(), set_volume);
                     /* It is good if we play some tone (when nothing else is playing). But there is no dedicated tone for volume. So putting our custom tone. */
                     tone_play(TONE_VOLUME);
@@ -178,7 +179,7 @@ static void va_button_adc_task(void *arg)
                     }
                     media_hal_set_mute(media_hal_get_handle(), 0);
                     volume_to_set = set_volume;
-                    va_led_set(VA_SET_VOLUME);
+                    va_ui_set_state(VA_SET_VOLUME);
                     media_hal_control_volume(media_hal_get_handle(), set_volume);
                     /* It is good if we play some tone (when nothing else is playing). But there is no dedicated tone for volume. So putting our custom tone. */
                     tone_play(TONE_VOLUME);
@@ -218,12 +219,12 @@ static void va_button_adc_task(void *arg)
                 }
                 if(mute_btn_press_flg == 2) {
                     va_dsp_mic_mute(button_st.b_mute);
-                    va_led_set(VA_MUTE_ENABLE);
+                    va_ui_set_state(VA_MUTE_ENABLE);
                     tone_play(TONE_PRIVACY_ON);
                     mute_btn_press_flg = 3;
                 } else if (mute_btn_press_flg == 4) {
                     va_dsp_mic_mute(button_st.b_mute);
-                    va_led_set(VA_MUTE_DISABLE);
+                    va_ui_set_state(VA_MUTE_DISABLE);
                     tone_play(TONE_PRIVACY_OFF);
                     mute_btn_press_flg = 1;
                 }
@@ -232,7 +233,7 @@ static void va_button_adc_task(void *arg)
 #ifndef CONFIG_ULP_COPROC_ENABLED
         if (((esp_timer_get_time() - curr_time) > (VOL_NOTIF_DELAY * 1000)) && en_timer) {
             speaker_notify_vol_changed(set_volume);
-            va_led_set(VA_SET_VOLUME_DONE);
+            va_ui_set_state(VA_SET_VOLUME_DONE);
             en_timer = false;
         }
 #endif
@@ -241,7 +242,7 @@ static void va_button_adc_task(void *arg)
                 ESP_LOGE(TAG, "No callback set for wifi reset");
             } else {
                 /* Do not set any led here. Instead set the Factory reset led when starting provisioning after restart. */
-                va_led_set(LED_OFF);
+                va_ui_set_state(VA_UI_OFF);
                 va_reset();
                 (*va_button_wifi_reset_cb)(NULL);
                 va_button_is_wifi_rst = true;   //Since non-blocking as of now
@@ -251,7 +252,7 @@ static void va_button_adc_task(void *arg)
         if(va_button_factory_rst_en) {
             va_button_is_factory_rst = true;   //Lets keep for it, can be removed as this is a blocking call
             /* Do not set any led here. Instead set the Factory reset led when starting provisioning after restart. */
-            va_led_set(LED_OFF);
+            va_ui_set_state(VA_UI_OFF);
             va_nvs_flash_erase();
             va_reset();
             esp_restart();
@@ -337,7 +338,7 @@ static void va_button_gpio_task(void *arg)
         }
         if(va_button_factory_rst_en) {
             /* Do not set any led here. Instead set the Factory reset led when starting provisioning after restart. */
-            va_led_set(LED_OFF);
+            va_ui_set_state(VA_UI_OFF);
             vTaskDelay(1000 / portTICK_RATE_MS);
             va_nvs_flash_erase();
             va_dsp_reset();

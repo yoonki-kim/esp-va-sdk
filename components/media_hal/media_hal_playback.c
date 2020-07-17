@@ -38,8 +38,8 @@ static const char *TAG = "[media_hal_playback]";
 #define MAX_PLAYBACK_REQUESTERS 2
 
 #define CONVERT_BUF_SIZE 1024
-#define BUF_SZ (CONVERT_BUF_SIZE * 2)
-static uint8_t convert_buf[BUF_SZ];
+#define BUF_SZ (CONVERT_BUF_SIZE * 12) /* Can handle 12x conv: 8k/1 --> 48k/2 */
+static uint8_t *convert_buf;
 
 static xSemaphoreHandle eq_mutex = NULL; /* To protect eq_handle */
 
@@ -67,7 +67,7 @@ static int default_write_callback(int port_num, void *buf, size_t len, int src_b
                 return -1;
             }
         } else {
-            ESP_LOGE(TAG, "destination bits need to greater then and multiple of source bits");
+            ESP_LOGE(TAG, "destination bits need to greater than and multiple of source bits");
             return -1;
         }
         i2s_write_expand((i2s_port_t) port_num, (char *) buf, len, src_bps, dst_bps, &sent_len, portMAX_DELAY);
@@ -213,6 +213,14 @@ esp_err_t media_hal_disable_playback(void *playback_handle)
 
 void *media_hal_init_playback(media_hal_playback_cfg_t *cfg)
 {
+    if (!convert_buf) {
+        convert_buf = esp_audio_mem_calloc(1, BUF_SZ);
+        if (!convert_buf) {
+            ESP_LOGE(TAG, "convert_buf allocation failed");
+            return NULL;
+        }
+    }
+
     if (!eq_mutex) {
         eq_mutex = xSemaphoreCreateMutex();
         if (!eq_mutex) {

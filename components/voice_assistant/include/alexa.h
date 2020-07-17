@@ -86,13 +86,13 @@ int alexa_disable_bt_only_mode();
 int alexa_init();
 
 /**
- * Enable BT A2DP sink
+ * Enable BT A2DP sink and source
  *
- * Function enables BT A2DP sink functionality and registers it with Alexa. Function should be called before
+ * Function enables BT A2DP sink and source functionality and registers it with Alexa. Function should be called before
  * the call to alexa_init()
  *
  * @note this function just sets a2dp_sink to be inited. Actual initialization is done by `alexa_init()`
  */
-void alexa_bt_a2dp_sink_init();
+void alexa_bt_init();
 
 #endif /*_ALEXA_H_ */

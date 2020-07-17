@@ -216,6 +216,8 @@ int rb_read(rb_handle_t handle, uint8_t *buf, int buf_len, uint32_t ticks_to_wai
         xSemaphoreGive(rb->lock);
         if (!rb->writer_finished && !rb->abort_read && !rb->reader_unblock) {
             if (xSemaphoreTake(rb->can_read, ticks_to_wait) != pdTRUE) {
+                /* Small delay to avoid WDT triggering when the ticks_to_wait is set to 0 */
+                vTaskDelay(1);
                 goto out;
             }
         }
