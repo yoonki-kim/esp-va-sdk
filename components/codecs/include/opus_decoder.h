@@ -17,9 +17,21 @@
 
 #include <audio_codec.h>
 
+/**
+ * Defaults if not set explicitly.
+ *
+ * Please note that, re-defining these have no effect.
+ * This are for understanding only.
+ * Use proper `cfg` instead to `opus_codec_create` API.
+ */
 #define OPUS_CODEC_TASK_STACK_SIZE    (12 * 4096)
 #define OPUS_CODEC_TASK_PRIORITY      3
 
+/**
+ * @brief   default opus decoder config
+ *          e.g.: `opus_decoder_cfg_t cfg = DEFAULT_OPUS_DECODER_CONFIG();` will
+ *                create default cfg to be passed to `opus_codec_create`
+ */
 #define DEFAULT_OPUS_DECODER_CONFIG() {                 \
     .task_stack         = OPUS_CODEC_TASK_STACK_SIZE,   \
     .task_prio          = OPUS_CODEC_TASK_PRIORITY,     \
@@ -44,7 +56,9 @@ typedef struct {
 } opus_codec_cfg_t;
 
 typedef struct opus_codec {
-    audio_codec_t base;
+    audio_codec_t base; /* Base codec pointer. Use audio_codec APIs on this. */
+
+    /* Private members */
     uint8_t *in_buf; /* Used in raw opus case. */
     int in_buf_size; /* Used in raw opus case. */
     short *out_buf;
@@ -82,7 +96,17 @@ typedef struct opus_codec {
     int current_channels;
 } opus_codec_t;
 
+/**
+ * @brief   create opus decoder with given config.
+ *          This also allocate major chunks of memory needed for decoder.
+ *          Some dynamic memory could still be allocated run-time.
+ */
 opus_codec_t *opus_codec_create(opus_codec_cfg_t *cfg);
+
+/**
+ * @brief   destroy opus decoder.
+ *          This also deallocates chunks of memory allocated with `opus_codec_create`.
+ */
 esp_err_t opus_codec_destroy(opus_codec_t *codec);
 
 #endif

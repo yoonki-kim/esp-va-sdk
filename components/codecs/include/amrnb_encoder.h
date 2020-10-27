@@ -22,6 +22,8 @@
 
 typedef struct amrnb_encoder_t {
     audio_codec_t base;
+
+    /*--- Private fields ---*/
     void *encoder;
     uint8_t *in_buf;
     uint8_t *out_buf;
@@ -29,9 +31,23 @@ typedef struct amrnb_encoder_t {
     int pcmcnt;
     int framecnt;
     int total_bytes;
+    int mode; /* encoding mode */
 } amrnb_encoder_t;
 
-void amrnb_encoder_set_offset(amrnb_encoder_t *codec, int offset);
+/**
+ * Set encoding mode to one of the below:
+ * MR475 = 0 // 4.75 kbps
+ * MR515 = 1 // 5.15 kbps
+ * MR59  = 2 // 5.90 kbps
+ * MR67  = 3 // 6.70 kbps
+ * MR74  = 4 // 7.40 kbps
+ * MR795 = 5 // 7.95 kbps
+ * MR102 = 6 // 10.2 kbps
+ * MR122 = 7 // 12.2 kbps
+ * MRDTX = 8 // DTX
+ */
+void amrnb_encoder_set_mode(amrnb_encoder_t *codec, int mode);
+
 void amrnb_encoder_set_stack_size(amrnb_encoder_t *codec, ssize_t stack_size);
 amrnb_encoder_t *amrnb_encoder_create();
 esp_err_t amrnb_encoder_destroy(amrnb_encoder_t *codec);

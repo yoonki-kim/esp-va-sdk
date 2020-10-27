@@ -22,6 +22,7 @@ struct basic_player {
     struct audio_codec_list {
         audio_codec_t *base;
     } codec[CODEC_TYPE_DEC_MAX]; /* We do not need encoder types */
+    audio_codec_t *current_playing;
     http_playback_stream_t *http_stream;
 
     enum basic_player_play_method play_method;
@@ -96,12 +97,24 @@ static void basic_player_wait_for_stop_and_reset(void *arg)
 {
     struct basic_player *b = (struct basic_player *)arg;
 
+    int spin_counter = 0;
     while(!b->is_http_stopped) {
-        printf("%s: Stopping http_stream line %d\n", TAG, __LINE__);
+        if (spin_counter++ > 20) {
+            ESP_LOGW(TAG, "Waiting for http_stream to stop line %d", __LINE__);
+            spin_counter = 0;
+        } else {
+            ESP_LOGI(TAG, "Waiting for http_stream to stop line %d", __LINE__);
+        }
         vTaskDelay(50 / portTICK_PERIOD_MS);
     }
+    spin_counter = 0;
     while(!b->is_codec_stopped) {
-        printf("%s: Stopping decoder line %d\n", TAG, __LINE__);
+        if (spin_counter++ > 20) {
+            ESP_LOGW(TAG, "Waiting for decoder to stop line %d", __LINE__);
+            spin_counter = 0;
+        } else {
+            ESP_LOGI(TAG, "Waiting for decoder to stop line %d", __LINE__);
+        }
         vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 
@@ -152,6 +165,7 @@ esp_err_t basic_player_play(basic_player_handle_t handle, basic_player_play_conf
         if (b->codec[codec_type].base) {
             audio_codec_set_offset(b->codec[codec_type].base, play_config->offset_in_ms);
             audio_codec_start(b->codec[codec_type].base);
+            b->current_playing = b->codec[codec_type].base;
         } else {
             return ESP_FAIL;
         }
@@ -184,6 +198,13 @@ esp_err_t basic_player_stop(basic_player_handle_t handle)
         audio_stream_stop(&b->http_stream->base);
         arb_abort(b->http_output_rb);
     }
+    /**
+     * Aborting the output buffer should be just fine
+     * But if `codec_output_rb` is reset by external application before codec stops,
+     * we get into trouble. A very next audio will not be able to play.
+     * Do `audio_codec_stop` as well
+     */
+    audio_codec_stop(b->current_playing);
     arb_abort(b->codec_output_rb);
 
     basic_player_wait_for_stop_and_reset((void *)b);
@@ -426,7 +447,9 @@ static esp_err_t basic_player_http_event_cb(void *arg, int event, void *data)
             if (b->codec[codec_type].base) {
                 audio_codec_set_offset(b->codec[codec_type].base, offset_in_ms);
                 audio_codec_start(b->codec[codec_type].base);
+                b->current_playing = b->codec[codec_type].base;
             } else {
+                ESP_LOGE(TAG, "Unsupported decoder type %d", codec_type);
                 ret = ESP_FAIL;
             }
             break;

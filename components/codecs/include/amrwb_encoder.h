@@ -41,4 +41,20 @@ void amrwb_encoder_set_stack_size(amrwb_encoder_t *codec, ssize_t stack_size);
 amrwb_encoder_t *amrwb_encoder_create();
 esp_err_t amrwb_encoder_destroy(amrwb_encoder_t *codec);
 
+/**
+ * Not supported yet...
+ *
+ * Set AMR encoding mode 0-8:
+ * VOAMRWB_MD66        = 0,	//6.60kbps
+ * VOAMRWB_MD885       = 1,    //8.85kbps
+ * VOAMRWB_MD1265      = 2,	//12.65kbps
+ * VOAMRWB_MD1425      = 3,	//14.25kbps
+ * VOAMRWB_MD1585      = 4,	//15.85bps
+ * VOAMRWB_MD1825      = 5,	//18.25bps
+ * VOAMRWB_MD1985      = 6,	//19.85kbps
+ * VOAMRWB_MD2305      = 7,    //23.05kbps
+ * VOAMRWB_MD2385      = 8,    //23.85kbps
+ */
+void amrwb_encoder_set_mode(amrwb_encoder_t *codec, int mode);
+
 #endif

@@ -48,7 +48,7 @@ typedef enum {
 } amr_audio_type_t;
 
 /**
- * @brief      Opus Decoder configuration
+ * @brief      AMR Decoder configuration
  */
 typedef struct {
     int                     task_stack;         /*!< Task stack size */
@@ -59,7 +59,7 @@ typedef struct {
 
 void amr_decoder_set_offset(amr_decoder_t *codec, int offset);
 void amr_decoder_set_stack_size(amr_decoder_t *codec, ssize_t stack_size);
-amr_decoder_t *amr_decoder_create();
+amr_decoder_t *amr_decoder_create(amr_decoder_cfg_t *cfg);
 esp_err_t amr_decoder_destroy(amr_decoder_t *codec);
 
 #endif /* _AMR_DECODER_H_ */

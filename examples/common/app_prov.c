@@ -11,12 +11,10 @@
 #include <esp_log.h>
 
 #include "app_prov.h"
-#include <avs_config.h>
+
 #ifdef CONFIG_ALEXA_ENABLE_CLOUD
-#include <app_cloud.h>
 #include <qrcode.h>
 #define ENABLE_PROV_QR 1
-
 #endif /* CONFIG_ALEXA_ENABLE_CLOUD */
 
 static const char *TAG = "[app_prov]";
@@ -115,17 +113,9 @@ void app_prov_start_provisionig(const char *service_name, void *data)
     const char *pop = CONFIG_VOICE_ASSISTANT_POP;
     const char *service_key = NULL;
 
-    alexa_wifi_prov_event_handler(ALEXA_PROV_EVENT_CREATE_ENDPOINT, data);
-#ifdef CONFIG_ALEXA_ENABLE_CLOUD
-    app_cloud_wifi_prov_event_handler(ALEXA_PROV_EVENT_CREATE_ENDPOINT, NULL);
-#endif /* CONFIG_ALEXA_ENABLE_CLOUD */
     if (wifi_prov_mgr_start_provisioning(security, pop, service_name, service_key) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start provisioning");
     }
-    alexa_wifi_prov_event_handler(ALEXA_PROV_EVENT_REGISTER_ENDPOINT, data);
-#ifdef CONFIG_ALEXA_ENABLE_CLOUD
-    app_cloud_wifi_prov_event_handler(ALEXA_PROV_EVENT_REGISTER_ENDPOINT, NULL);
-#endif /* CONFIG_ALEXA_ENABLE_CLOUD */
     app_wifi_print_qr(service_name, pop, "ble");
     printf("%s: Provisioning started with: \n\tservice name: %s \n\tservice key: %s\n\tproof of possession (pop): %s\n", TAG, service_name, service_key ? service_key : "", pop);
 }

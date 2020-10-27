@@ -19,6 +19,7 @@
 #include "app_cloud.h"
 
 static const char *TAG = "[app_cloud]";
+esp_rmaker_node_t *node;
 
 static int add_user_cli_handler(int argc, char *argv[])
 {
@@ -58,7 +59,7 @@ static int app_cloud_register_cli()
 //         case CLOUD_OTA_START:
 //             va_ui_set_state(VA_UI_OFF);
 //             alexa_local_config_stop();
-//             va_reset();
+//             va_reset(false);
 //             va_ui_set_state(VA_UI_OTA);
 //             break;
 
@@ -71,22 +72,6 @@ static int app_cloud_register_cli()
 //     }
 // }
 
-void app_cloud_wifi_prov_event_handler(alexa_prov_event_t event, void *user_data)
-{
-    switch (event) {
-        case ALEXA_PROV_EVENT_CREATE_ENDPOINT:
-            esp_rmaker_user_mapping_endpoint_create();
-            break;
-
-        case ALEXA_PROV_EVENT_REGISTER_ENDPOINT:
-            esp_rmaker_user_mapping_endpoint_register();
-            break;
-
-        default:
-             break;
-     }
-}
-
 void app_cloud_switch_driver_init()
 {
     /* Initialize the device driver here */
@@ -97,14 +82,15 @@ void app_cloud_switch_state_update(bool state)
     /* Update the switch state here */
 }
 
-static esp_err_t switch_callback(const char *dev_name, const char *name, esp_rmaker_param_val_t val, void *priv_data)
+static esp_err_t write_cb(const esp_rmaker_device_t *device, const esp_rmaker_param_t *param,
+            const esp_rmaker_param_val_t val, void *priv_data, esp_rmaker_write_ctx_t *ctx)
 {
-    if (strcmp(name, "power") == 0) {
+    if (strcmp(esp_rmaker_param_get_name(param), "power") == 0) {
         printf("%s: **************************************************************\n", TAG);
-        printf("%s: ********************** %s turned %s **********************\n", TAG, dev_name, val.val.b ? "ON" : "OFF");
+        printf("%s: ********************** %s turned %s **********************\n", TAG, esp_rmaker_device_get_name(device), val.val.b ? "ON" : "OFF");
         printf("%s: **************************************************************\n", TAG);
         app_cloud_switch_state_update(val.val.b);
-        esp_rmaker_update_param(dev_name, name, val);
+        esp_rmaker_param_update_and_report(param, val);
     }
     return ESP_OK;
 }
@@ -112,25 +98,27 @@ static esp_err_t switch_callback(const char *dev_name, const char *name, esp_rma
 static void app_cloud_switch_init()
 {
     app_cloud_switch_driver_init();
-    esp_rmaker_create_device("Switch", ESP_RMAKER_DEVICE_SWITCH, switch_callback, NULL);
-    esp_rmaker_device_add_name_param("Switch", "name");
-    esp_rmaker_device_add_power_param("Switch", "power", true);
-    esp_rmaker_device_assign_primary_param("Switch", "power");
+
+    esp_rmaker_device_t *switch_device = esp_rmaker_device_create("Switch", ESP_RMAKER_DEVICE_SWITCH, NULL);
+    esp_rmaker_device_add_cb(switch_device, write_cb, NULL);
+
+    esp_rmaker_device_add_param(switch_device, esp_rmaker_name_param_create("name", "Switch"));
+    esp_rmaker_param_t *power_param = esp_rmaker_power_param_create("power", true);
+    esp_rmaker_device_add_param(switch_device, power_param);
+    esp_rmaker_device_assign_primary_param(switch_device, power_param);
+
+    esp_rmaker_node_add_device(node, switch_device);
 }
 
 void app_cloud_init()
 {
     app_cloud_register_cli();
     esp_rmaker_config_t rainmaker_cfg = {
-        .info = {
-            .name = "ESP RainMaker Device",
-            .type = "Switch",
-        },
         .enable_time_sync = false,
     };
-    esp_err_t err = esp_rmaker_init(&rainmaker_cfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Could not initialise ESP RainMaker. Aborting!!!");
+    node = esp_rmaker_node_init(&rainmaker_cfg, "ESP RainMaker Device", "Switch");
+    if (!node) {
+        ESP_LOGE(TAG, "Could not initialise node. Aborting!!!");
         return;
     }
 

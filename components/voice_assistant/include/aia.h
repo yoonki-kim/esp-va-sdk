@@ -7,6 +7,7 @@
 #include "voice_assistant.h"
 #include "auth_delegate.h"
 #include <aws_iot_mqtt_client.h>
+#include <alexa_smart_home.h>
 
 /* Once assigned by the application, these should not be freed as long as the device is working. */
 typedef struct {
@@ -29,6 +30,8 @@ typedef struct {
 /** The Alexa Configuration Structure
  */
 typedef struct {
+    char *device_serial_num;
+    char *product_id;
     device_config_t device_config;
 } aia_config_t;
 
@@ -47,6 +50,8 @@ typedef struct {
  */
 int ais_mqtt_init(aia_config_t *cfg, void (*app_aws_iot_cb)(void));
 int ais_shadow_init(aia_config_t *cfg, void (*app_aws_iot_cb)(void));
+
+int ais_early_init();
 
 /** Initialise Alexa Bluetooth
  *
@@ -71,5 +76,10 @@ bool alexa_mqtt_is_connected();
 
 /* This client can be used for custom topics. */
 AWS_IoT_Client *alexa_mqtt_get_client();
+
+/**
+ * @brief   Get pointer to Alexa config
+ */
+aia_config_t *aia_get_cfg();
 
 #endif /*_AIA_H_ */

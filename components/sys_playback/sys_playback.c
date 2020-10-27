@@ -407,6 +407,12 @@ static esp_err_t sys_playback_downmix_init(sys_playback_config_t *sys_playback_c
 
 int sys_playback_init(sys_playback_config_t *sys_playback_cfg)
 {
+    static bool sp_initialized = false;
+    if (sp_initialized) {
+        ESP_LOGI(TAG, "Already initialized");
+        return ESP_OK;
+    }
+
     sp.resting_rb = rb_init("resting_rb", 512);
     if (sp.resting_rb == NULL) {
         ESP_LOGE(TAG, "failed to create resting rb");
@@ -448,6 +454,7 @@ int sys_playback_init(sys_playback_config_t *sys_playback_cfg)
         goto sp_init_error;
     }
 
+    sp_initialized = true;
     return ESP_OK;
 
 sp_init_error:

@@ -85,6 +85,8 @@ int alexa_disable_bt_only_mode();
  */
 int alexa_init();
 
+int alexa_early_init();
+
 /**
  * Enable BT A2DP sink and source
  *

@@ -23,10 +23,18 @@
 #include "resample.h"
 #endif
 
+/**
+ * Defaults if not set explicitly.
+ *
+ * Please note that, re-defining these have no effect.
+ * This are for understanding only.
+ * Use proper `cfg` instead to `opus_enc_create` API.
+ */
 #define OPUS_CODEC_TASK_STACK_SIZE    (8 * 4096)
 #define OPUS_CODEC_TASK_PRIORITY      3
 
 #ifndef DISABLE_RESAMPLE
+/* ----------------IGNORE----------------- */
 typedef struct {
     void *user_data;
     int channel;
@@ -41,6 +49,11 @@ typedef struct {
 
 #endif
 
+/**
+ * @brief   default opus encoder config
+ *          e.g.: `opus_encoder_cfg_t cfg = DEFAULT_OPUS_ENCODER_CONFIG();` will
+ *                create default cfg to be passed to `opus_enc_create`
+ */
 #define DEFAULT_OPUS_ENCODER_CONFIG() {                 \
     .task_stack         = OPUS_CODEC_TASK_STACK_SIZE,   \
     .task_prio          = OPUS_CODEC_TASK_PRIORITY,     \
@@ -67,7 +80,9 @@ typedef struct {
 } opus_encoder_cfg_t;
 
 typedef struct opus_encoder {
-    audio_codec_t base;
+    audio_codec_t base;   /* Base codec pointer. Use audio_codec APIs on this. */
+
+    /* private members */
     short *out_buf;
     int offset; //offset in ms
     int outbuf_size;
@@ -140,7 +155,17 @@ typedef struct opus_encoder {
     int lookahead;
 } opus_encoder_t;
 
+/**
+ * @brief   create opus encoder with given config.
+ *          This also allocate major chunks of memory needed for encoder.
+ *          Some dynamic memory could still be allocated run-time.
+ */
 opus_encoder_t *opus_enc_create(opus_encoder_cfg_t *cfg);
+
+/**
+ * @brief   destroy opus encoder.
+ *          This also deallocates chunks of memory allocated with `opus_enc_create`.
+ */
 esp_err_t opus_enc_destroy(opus_encoder_t *codec);
 
 #endif

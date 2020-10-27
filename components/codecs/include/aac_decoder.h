@@ -11,11 +11,23 @@
 extern "C" {
 #endif
 
+/**
+ * Defaults if not set explicitly.
+ *
+ * Please note that, re-defining these have no effect.
+ * This are for understanding only.
+ * Use `aac_codec_set_stack_size` instead after `aac_codec_create`.
+ */
 #define AAC_CODEC_TASK_STACK_SIZE    4096
 #define AAC_CODEC_TASK_PRIORITY      3
 
+/**
+ * @brief   aac codec structure
+ */
 typedef struct aac_codec {
-    audio_codec_t base;
+    audio_codec_t base; /* Base codec pointer. Use audio_codec APIs on this. */
+
+    /* Private members */
     void *pvmp4_decoder;
     uint8_t *decode_buf;
     uint8_t *in_buf;
@@ -45,9 +57,26 @@ typedef struct aac_codec {
     int _current_channels;
 } aac_codec_t;
 
+/**
+ * @brief   set stack size of aac decoder.
+ *
+ * @note    must be set before `audio_codec_init`, ineffective otherwise
+ */
 void aac_codec_set_stack_size(aac_codec_t *codec, ssize_t stack_size);
+
+/**
+ * @brief   create aac decoder.
+ *          This also allocate major chunks of memory needed for decoder.
+ *          Some dynamic memory could still be allocated run-time.
+ */
 aac_codec_t *aac_codec_create();
+
+/**
+ * @brief   destroy aac decoder.
+ *          This also deallocates chunks of memory allocated with `aac_codec_create`.
+ */
 esp_err_t aac_codec_destroy(aac_codec_t *codec);
+
 #ifdef __cplusplus
 }
 #endif

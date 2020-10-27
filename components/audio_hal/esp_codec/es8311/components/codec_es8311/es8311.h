@@ -26,6 +26,7 @@
 #define _ES8311_H
 
 #include "media_hal.h"
+#include "esxxx_common.h"
 
 /*
  *   ES8311_REGISTER NAME_REG_REGISTER ADDRESS
@@ -118,7 +119,7 @@ typedef enum {
  *      - ESP_OK
  *      - ESP_FAIL
  */
-esp_err_t es8311_init(media_hal_op_mode_t es8311_mode, media_hal_adc_input_t es8311_adc_input, media_hal_dac_output_t es8311_dac_output, int port_num);
+esp_err_t es8311_init(media_hal_config_t *media_hal_conf);
 
 /**
  * @brief Deinitialize ES8311 codec chip
@@ -212,7 +213,7 @@ esp_err_t es8311_set_bits_per_sample(media_hal_codec_mode_t mode, media_hal_bit_
  *     - ESP_OK
  *     - ESP_FAIL
  */
-esp_err_t es8311_start(int mode);
+esp_err_t es8311_start(es_module_t mode);
 
 /**
  * @brief  Stop ES8311 codec chip
@@ -223,7 +224,7 @@ esp_err_t es8311_start(int mode);
  *     - ESP_OK
  *     - ESP_FAIL
  */
-esp_err_t es8311_stop(int mode);
+esp_err_t es8311_stop(es_module_t mode);
 
 int es8311_set_mute(int enable);
 

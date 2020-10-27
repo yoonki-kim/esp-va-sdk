@@ -8,7 +8,7 @@
  * This API checks the wifi_reset bit in NVS.
  * If it is set, then it sets the provisioning status as false, so that the device goes into provisioning mode. It also starts a timer for `WIFI_RESET_TIMER_TIMEOUT` seconds to change the Wi-Fi credentials. If the timer expires before the new Wi-Fi credentials are applied, then the device reboots and tries to connect with the previous credentials itself.
  */
-void app_wifi_check_wifi_reset();
+int app_wifi_check_wifi_reset();
 
 /* Initialise Wi-Fi Reset
  *

@@ -60,14 +60,18 @@ esp_err_t playlist_add_entry(http_playlist_t *playlist, char *line, const char *
                 goto add_entry_err2;
             }
             pos[1] = 0;
-            asprintf(&(new->uri), "%s%s", tmp_str, line);
+            size_t uri_len = strlen(tmp_str) + strlen(line) + 1;
+            new->uri = esp_audio_mem_calloc(1, uri_len);
+            snprintf(new->uri, uri_len, "%s%s", tmp_str, line);
         } else { //Relative URI
             char *pos = strrchr(tmp_str, '/'); //Search for last "/"
             if (!pos) { //'/' not found case
                 goto add_entry_err2;
             }
             pos[1] = 0;
-            asprintf(&(new->uri), "%s%s", tmp_str, line);
+            size_t uri_len = strlen(tmp_str) + strlen(line) + 1;
+            new->uri = esp_audio_mem_calloc(1, uri_len);
+            snprintf(new->uri, uri_len, "%s%s", tmp_str, line);
         }
         free(tmp_str);
     } else {
@@ -78,7 +82,7 @@ esp_err_t playlist_add_entry(http_playlist_t *playlist, char *line, const char *
     STAILQ_FOREACH(find, &playlist->head, entries) {
         if (strcmp(find->uri, new->uri) == 0) {
             ESP_LOGD(TAG, "URI exists");
-            free(new->uri);
+            esp_audio_mem_free(new->uri);
             free(new);
             return ESP_OK;
         }
@@ -102,7 +106,7 @@ esp_err_t playlist_free(http_playlist_t *playlist)
     }
     playlist_entry_t *datap, *temp;
     STAILQ_FOREACH_SAFE(datap, &playlist->head, entries, temp) {
-        free(datap->uri);
+        esp_audio_mem_free(datap->uri);
         free(datap);
     }
     if (playlist->host_uri) {
@@ -136,7 +140,7 @@ char *playlist_get_next_entry(http_playlist_t *playlist)
         if (playlist->total_entries > MAX_PLAYLIST_KEEP_TRACKS) {
             playlist_entry_t *tmp = STAILQ_FIRST(&playlist->head);
             STAILQ_REMOVE_HEAD(&playlist->head, entries);
-            free(tmp->uri);
+            esp_audio_mem_free(tmp->uri);
             free(tmp);
             playlist->total_entries--;
         }

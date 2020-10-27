@@ -5,7 +5,7 @@
 
 PROJECT_NAME := aia
 PROJECT_VER := 1.0
-export VOICE_ASSISTANT=aia
+export VOICE_ASSISTANT = aia
 export LED_PATTERN_TYPE = alexa
 CPPFLAGS += -DVOICE_ASSISTANT_AIA
 
@@ -23,7 +23,7 @@ endif
 
 include $(AUDIO_BOARD_PATH)/audio_board.mk
 
-EXTRA_COMPONENT_DIRS += $(PROJECT_PATH)/../../components $(PROJECT_PATH)/../common $(AUDIO_BOARD_PATH)/../../../ $(AWS_IOT_PATH)/
+EXTRA_COMPONENT_DIRS += $(PROJECT_PATH)/../../components $(PROJECT_PATH)/../common $(PROJECT_PATH)/../additional_components $(AUDIO_BOARD_PATH)/../../../ $(AWS_IOT_PATH)/
 
 ifneq ($(CLOUD_AGENT_PATH),)
     EXTRA_COMPONENT_DIRS += $(CLOUD_AGENT_PATH)/components

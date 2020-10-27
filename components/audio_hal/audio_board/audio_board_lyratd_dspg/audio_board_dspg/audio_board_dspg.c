@@ -29,7 +29,7 @@
     }
 
 esp_err_t audio_board_i2s_pin_config(int port_num, i2s_pin_config_t *ab_i2s_pin)
-{   
+{
     PLAT_ASSERT(ab_i2s_pin, "Error assigning i2s pins", -1);
     switch(port_num) {
         case 0:
@@ -52,13 +52,13 @@ esp_err_t audio_board_i2s_pin_config(int port_num, i2s_pin_config_t *ab_i2s_pin)
     PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0_CLK_OUT1);
     SET_PERI_REG_BITS(PIN_CTRL, CLK_OUT1, 0, CLK_OUT1_S);
 
-    return ESP_OK; 
+    return ESP_OK;
 }
 
 esp_err_t audio_board_i2c_pin_config(int port_num, i2c_config_t *ab_i2c_pin)
-{   
+{
     PLAT_ASSERT(ab_i2c_pin, "Error assigning i2c pins", -1);
-    
+
     switch(port_num) {
         case 0:
             ab_i2c_pin->sda_io_num = GPIO_NUM_18;
@@ -76,7 +76,7 @@ esp_err_t audio_board_i2c_pin_config(int port_num, i2c_config_t *ab_i2c_pin)
             ESP_LOGE(PLAT_TAG, "Entered i2c port number is wrong");
             return ESP_FAIL;
     }
-    
+
     return ESP_OK;
 }
 

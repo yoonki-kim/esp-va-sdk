@@ -37,10 +37,6 @@ extern "C" {
 
 int va_board_init();
 
-//esp_err_t va_board_button_init();
-//
-//esp_err_t va_board_led_init();
-
 #ifdef __cplusplus
 }
 #endif

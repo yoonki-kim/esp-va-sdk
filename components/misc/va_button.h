@@ -45,11 +45,13 @@ typedef struct {
 } button_cfg_t;
 
 typedef void (*va_button_wifi_reset_cb_t)(void *arg);
+typedef void (*va_button_setup_mode_cb_t)(void *arg);
 /**
  * @brief  initialize button service
  */
 esp_err_t va_button_init(const button_cfg_t *button_cfg, int (*button_event_cb)(int));
 void va_button_register_wifi_reset_cb(va_button_wifi_reset_cb_t wifi_reset_cb);
+void va_button_register_setup_mode_cb(va_button_wifi_reset_cb_t setup_mode_cb);
 
 /**
  *

@@ -2,7 +2,6 @@
 # Component Makefile
 #
 
-VOICE_ASSISTANT ?= alexa
 COMPONENT_ADD_INCLUDEDIRS := include
 
 

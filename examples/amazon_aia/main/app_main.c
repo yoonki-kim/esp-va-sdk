@@ -19,10 +19,13 @@
 
 #include <va_mem_utils.h>
 #include <va_ui.h>
+#include <va_button.h>
 #include <scli.h>
 #include <va_diag_cli.h>
 #include <wifi_cli.h>
 #include <tone.h>
+#include <prompt.h>
+#include <speaker.h>
 #include <avs_config.h>
 #include <auth_delegate.h>
 #include <speech_recognizer.h>
@@ -34,6 +37,8 @@
 
 #ifdef CONFIG_ALEXA_ENABLE_CLOUD
 #include <app_cloud.h>
+#else /* !CONFIG_ALEXA_ENABLE_CLOUD */
+#include <app_smart_home.h>
 #endif /* CONFIG_ALEXA_ENABLE_CLOUD */
 
 #define SERVICENAME_SSID_PREFIX  "ESP-Alexa-"
@@ -43,6 +48,11 @@ static const char *TAG = "[app_main]";
 
 #define FACTORY_PARTITION_NAME    "fctry_aia"
 #define DEVICE_NAMESPACE         "device"
+
+void app_setup_mode_prompt_cb(void *arg)
+{
+    prompt_play(PROMPT_SETUP_MODE);
+}
 
 char *app_nvs_alloc_and_get_str(const char *key)
 {
@@ -102,6 +112,13 @@ void app_get_device_config(aia_config_t *va_cfg)
     /* thing_name is only used in case of thing shadow. */
     app_aws_iot_set_thing_name(va_cfg->device_config.client_id);    /* Setting thing_name same as client_id itself. */
     va_cfg->device_config.thing_name = app_aws_iot_get_thing_name();
+
+    if (!va_cfg->device_config.certificate_pem_crt_cert) {
+        ESP_LOGE(TAG, "AIA device certificates not found. Please flash the certificates at the correct location and reboot the device to proceed.");
+        while(1) {
+            vTaskDelay(5000/portTICK_PERIOD_MS);
+        }
+    }
 }
 
 void app_main()
@@ -130,6 +147,15 @@ void app_main()
     ESP_ERROR_CHECK( ret );
 
     app_wifi_init();
+
+    /* app_cloud_init() and alexa_provisioning_init() should be called after wifi_init(), but before prov_init() */
+#ifdef CONFIG_ALEXA_ENABLE_CLOUD
+    app_cloud_init();
+#else /* !CONFIG_ALEXA_ENABLE_CLOUD */
+    app_smart_home_init();
+#endif /* CONFIG_ALEXA_ENABLE_CLOUD */
+    alexa_provisioning_init(amazon_cfg);
+
     app_prov_init();
     app_wifi_init_wifi_reset();
     app_get_device_config(va_cfg);
@@ -140,25 +166,34 @@ void app_main()
     va_diag_register_cli(); /* Add diagnostic functions to CLI */
     wifi_register_cli();
     app_auth_register_cli();
+    speaker_diag_register_cli(); /* Add CLI cmds for vol +/- */
 
     printf("\r");       // To remove a garbage print ">>"
     auth_delegate_init(alexa_signin_handler, alexa_signout_handler);
 
-#ifdef CONFIG_ALEXA_ENABLE_CLOUD
-    app_cloud_init();
-#endif /* CONFIG_ALEXA_ENABLE_CLOUD */
+    ais_early_init();
 
     char service_name[20];
     uint8_t mac[6];
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     snprintf(service_name, sizeof(service_name), "%s%02X%02X", SERVICENAME_SSID_PREFIX, mac[4], mac[5]);
 
-    app_wifi_check_wifi_reset();
+    int wifi_reset_status = app_wifi_check_wifi_reset();
 
     if (!app_prov_get_provisioning_status()) {
-        va_ui_set_state(VA_UI_RESET);
+        va_button_register_setup_mode_cb(app_setup_mode_prompt_cb);
         app_prov_start_provisionig(service_name, amazon_cfg);
+        va_ui_set_state(VA_UI_RESET);
+        if (wifi_reset_status) {
+            /* Boot for additional setup */
+            prompt_play(PROMPT_SETUP_MODE_ON);
+        } else {
+            /* Boot after factory reset */
+            prompt_play(PROMPT_HELLO);
+            prompt_play(PROMPT_SETUP_MODE);
+        }
         app_prov_wait_for_provisioning();
+        va_button_register_setup_mode_cb(NULL);
         va_ui_set_state(VA_UI_CAN_START);
     } else {
         va_ui_set_state(VA_UI_CAN_START);

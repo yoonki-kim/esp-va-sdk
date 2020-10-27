@@ -156,7 +156,7 @@ static int reboot_cli_handler(int argc, char *argv[])
 {
     /* Just to go to the next line */
     printf("\n");
-    va_reset();
+    va_reset(false);
     esp_restart();
     return 0;
 }
@@ -173,7 +173,7 @@ static int crash_cli_handler(int argc, char *argv[])
     return 0;
 }
 
-#ifdef VOICE_ASSISTANT_ALEXA
+#ifdef VOICE_ASSISTANT_AVS
 
 #include "alexa.h"
 
@@ -221,7 +221,7 @@ static esp_console_cmd_t diag_cmds[] = {
         .help = " ",
         .func = reboot_cli_handler,
     },
-#ifdef VOICE_ASSISTANT_ALEXA
+#ifdef VOICE_ASSISTANT_AVS
     {
         .command = "bt-only",
         .help = "Switch to BT only mode",

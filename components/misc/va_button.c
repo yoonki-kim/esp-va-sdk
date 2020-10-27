@@ -38,6 +38,7 @@ static bool va_button_factory_rst_en = false;
 static bool va_button_is_wifi_rst = false;
 static bool va_button_is_factory_rst = false;
 static va_button_wifi_reset_cb_t va_button_wifi_reset_cb = NULL;
+static va_button_setup_mode_cb_t va_button_setup_mode_cb = NULL;
 static uint8_t mute_btn_press_flg = 1;
 
 static int set_volume = 0;
@@ -195,6 +196,7 @@ static void va_button_adc_task(void *arg)
                    (current_adc_val > (button_st.but_cfg.va_button_adc_val[VA_BUTTON_FACTORY_RST] - button_st.but_cfg.tolerance)) &&
                    (current_adc_val < (button_st.but_cfg.va_button_adc_val[VA_BUTTON_FACTORY_RST] + button_st.but_cfg.tolerance))) {    //factory reset case
             if(button_exe_internal(VA_BUTTON_FACTORY_RST)) {
+                esp_timer_stop(button_st.esp_timer_handler_w);
                 esp_timer_start_once(button_st.esp_timer_handler_f, (FACTORY_RST_DELAY * 1000));
             }
         } else if((button_st.but_cfg.va_button_adc_val[VA_BUTTON_CUSTOM_1] != -1) &&
@@ -203,7 +205,7 @@ static void va_button_adc_task(void *arg)
             if(button_exe_internal(VA_BUTTON_CUSTOM_1)) {
             }
         } else if((button_st.but_cfg.va_button_adc_val[VA_BUTTON_CUSTOM_2] != -1) &&
-                  (current_adc_val > (button_st.but_cfg.va_button_adc_val[VA_BUTTON_CUSTOM_2] - button_st.but_cfg.tolerance)) && 
+                  (current_adc_val > (button_st.but_cfg.va_button_adc_val[VA_BUTTON_CUSTOM_2] - button_st.but_cfg.tolerance)) &&
                   (current_adc_val < (button_st.but_cfg.va_button_adc_val[VA_BUTTON_CUSTOM_2] + button_st.but_cfg.tolerance))) {    //button number 6 - custom
             if(button_exe_internal(VA_BUTTON_CUSTOM_2)) {
             }
@@ -243,7 +245,7 @@ static void va_button_adc_task(void *arg)
             } else {
                 /* Do not set any led here. Instead set the Factory reset led when starting provisioning after restart. */
                 va_ui_set_state(VA_UI_OFF);
-                va_reset();
+                va_reset(false);
                 (*va_button_wifi_reset_cb)(NULL);
                 va_button_is_wifi_rst = true;   //Since non-blocking as of now
             }
@@ -254,20 +256,24 @@ static void va_button_adc_task(void *arg)
             /* Do not set any led here. Instead set the Factory reset led when starting provisioning after restart. */
             va_ui_set_state(VA_UI_OFF);
             va_nvs_flash_erase();
-            va_reset();
+            va_reset(true);
             esp_restart();
             va_button_factory_rst_en = false;
         }
         if(active_btn_press && act_btn_press_en && !(va_button_factory_rst_en) && !(va_button_is_wifi_rst)) {
             printf("%s: Tap to talk button pressed\n", TAG);
             if (number_of_active_alerts > 0) {
-#if defined(VOICE_ASSISTANT_ALEXA) || defined(VOICE_ASSISTANT_AIA)
+#if defined(VOICE_ASSISTANT_AVS) || defined(VOICE_ASSISTANT_AIA)
                 if (alerts_is_active() == true) {
                     alerts_stop_currently_active();
                 }
-#endif /* VOICE_ASSISTANT_ALEXA || VOICE_ASSISTANT_AIA */
+#endif /* VOICE_ASSISTANT_AVS || VOICE_ASSISTANT_AIA */
             } else {
-                if (((ab_but_mute) || !(button_st.b_mute)) && (va_boot_is_finish())) {
+                if (!va_boot_is_finish()) {
+                    if (va_button_setup_mode_cb != NULL) {
+                        (*va_button_setup_mode_cb)(NULL);
+                    }
+                } else if ((ab_but_mute) || !(button_st.b_mute)) {
                     va_dsp_tap_to_talk_start();
                 }
             }
@@ -308,7 +314,7 @@ static esp_err_t va_button_gpio_init()
                 gpio_config(&io_conf);
                 gpio_isr_handler_add(button_st.but_cfg.va_button_gpio_num[i], gpio_isr_handler_t, (void *) button_st.but_cfg.va_button_gpio_num[i]);
             }
-        } 
+        }
     }
     return ESP_OK;
 }
@@ -352,6 +358,11 @@ static void va_button_gpio_task(void *arg)
 void va_button_register_wifi_reset_cb(va_button_wifi_reset_cb_t wifi_reset_cb)
 {
     va_button_wifi_reset_cb = wifi_reset_cb;
+}
+
+void va_button_register_setup_mode_cb(va_button_wifi_reset_cb_t setup_mode_cb)
+{
+    va_button_setup_mode_cb = setup_mode_cb;
 }
 
 esp_err_t va_button_init(const button_cfg_t *button_cfg, int (*button_event_cb)(int))

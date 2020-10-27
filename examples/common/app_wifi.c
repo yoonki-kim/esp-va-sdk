@@ -11,6 +11,7 @@
 
 #include <driver/adc.h>
 
+#include <prompt.h>
 #include <va_nvs_utils.h>
 #include <va_button.h>
 #include <va_ui.h>
@@ -29,8 +30,10 @@ static esp_timer_handle_t wifi_reset_timer_handle;
 static void app_wifi_timer_wifi_reset_task()
 {
     printf("%s: WiFi reset timed out. Restarting.", TAG);
+    prompt_play(PROMPT_SETUP_MODE_OFF);
     va_ui_set_state(VA_UI_OFF);
-    vTaskDelay(500/portTICK_PERIOD_MS);
+    /* Wait for prompt to complete playing */
+    vTaskDelay(5000/portTICK_PERIOD_MS);
     esp_restart();
 }
 
@@ -90,14 +93,16 @@ static void app_wifi_unset_wifi_reset_bit()
     }
 }
 
-void app_wifi_check_wifi_reset()
+int app_wifi_check_wifi_reset()
 {
     if (app_wifi_get_wifi_reset_bit() > 0) {
         app_wifi_start_wifi_reset_timer();
         app_prov_set_provisioning_status(false);
         app_wifi_unset_wifi_reset_bit();
         esp_wifi_set_storage(WIFI_STORAGE_RAM);
+        return 1;
     }
+    return 0;
 }
 
 int app_wifi_init_wifi_reset()
@@ -131,6 +136,7 @@ static void app_wifi_event_handler(void* arg, esp_event_base_t event_base, int32
             if (!app_prov_get_provisioning_status()) {
                 if (disconnect_count > MAX_RECONNECT_ATTEMPTS) {
                     ESP_LOGE(TAG, "Not able to connect. Incorrect password? Please re-provision the device");
+                    prompt_play(PROMPT_WIFI_PASSWORD_INCORRECT);
                     disconnect_count = 0;
                 } else {
                     esp_wifi_connect();

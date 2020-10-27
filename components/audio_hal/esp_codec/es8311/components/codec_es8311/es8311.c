@@ -39,7 +39,7 @@
  */
 #define FROM_MCLK_PIN       0
 #define FROM_SCLK_PIN       1
-#define MCLK_SOURCE         0
+#define MCLK_SOURCE         1
 
 /*
  * to define whether to reverse the clock
@@ -55,18 +55,6 @@
 #define ES8311_PA_PIN                   GPIO_NUM_12
 #define ES8311_I2C_MASTER_SPEED         100*1000
 #define ES8311_I2S_SAMPLE_RATE          48000
-
-/*
- * operate function of codec
-audio_hal_func_t AUDIO_CODEC_ES8311_DEFAULT_HANDLE = {
-    .audio_codec_initialize = es8311_codec_init,
-    .audio_codec_deinitialize = es8311_codec_deinit,
-    .audio_codec_ctrl = es8311_codec_ctrl_state,
-    .audio_codec_config_iface = es8311_codec_config_i2s,
-    .audio_codec_set_volume = es8311_codec_set_voice_volume,
-    .audio_codec_get_volume = es8311_codec_get_voice_volume,
-};
- */
 
 /*
  * Clock coefficient structer
@@ -223,7 +211,8 @@ static int es8311_write_reg(uint8_t reg_addr, uint8_t data)
     res |= i2c_master_stop(cmd);
     res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
-    ES_ASSERT(res, "ES8311 Write Reg error", -1);
+    ES_ASSERT(res, "ES8311 Write Reg error reg_addr: 0x%x, data: %d", -1, reg_addr, data);
+    ESP_LOGD(TAG, "ES8311 Write reg_addr: 0x%x, data: %d", reg_addr, data);
     return res;
 }
 
@@ -249,6 +238,7 @@ static int es8311_read_reg(uint8_t reg_addr)
     i2c_cmd_link_delete(cmd);
 
     ES_ASSERT(res, "Es8311 Read Reg error", -1);
+    ESP_LOGD(TAG, "ES8311 Read reg_addr: 0x%x, data: %d", reg_addr, data);
     return (int)data;
 }
 
@@ -323,12 +313,16 @@ void es8311_pa_power(bool enable)
     }
 }
 
-esp_err_t es8311_init(media_hal_op_mode_t es8311_mode, media_hal_adc_input_t es8311_adc_input, media_hal_dac_output_t es8311_dac_output, int port_num)
-
+esp_err_t es8311_init(media_hal_config_t *media_hal_conf)
 {
+    media_hal_op_mode_t es8311_mode = media_hal_conf->op_mode;
+    media_hal_adc_input_t es8311_adc_input = media_hal_conf->adc_input;
+    media_hal_dac_output_t es8388_dac_output = media_hal_conf->dac_output;
+    int port_num = media_hal_conf->port_num;
     esp_err_t ret = ESP_OK;
     uint8_t datmp, regv;
     int coeff;
+
     es8311_i2c_init(ES8311_I2C_PORT); // ESP32 in master mode
 
     ret |= es8311_write_reg(ES8311_CLK_MANAGER_REG01, 0x30);
@@ -352,11 +346,11 @@ esp_err_t es8311_init(media_hal_op_mode_t es8311_mode, media_hal_adc_input_t es8
      */
     switch (es8311_mode) {
         case MEDIA_HAL_MODE_MASTER:    /* MASTER MODE */
-            ESP_LOGI(TAG, "ES8311 in Master mode");
+            ESP_LOGD(TAG, "ES8311 in Master mode");
             regv |= 0x40;
             break;
         case MEDIA_HAL_MODE_SLAVE:    /* SLAVE MODE */
-            ESP_LOGI(TAG, "ES8311 in Slave mode");
+            ESP_LOGD(TAG, "ES8311 in Slave mode");
             regv &= 0xBF;
             break;
         default:
@@ -444,6 +438,10 @@ esp_err_t es8311_init(media_hal_op_mode_t es8311_mode, media_hal_adc_input_t es8
             default:
                 break;
         }
+
+        if (MCLK_SOURCE == FROM_SCLK_PIN) {
+            datmp = 3;     /* DIG_MCLK = LRCK * 256 = BCLK * 8 */
+        }
         regv |= (datmp) << 3;
         ret |= es8311_write_reg(ES8311_CLK_MANAGER_REG02, regv);
 
@@ -506,7 +504,8 @@ esp_err_t es8311_init(media_hal_op_mode_t es8311_mode, media_hal_adc_input_t es8
     ret |= es8311_write_reg(ES8311_SYSTEM_REG13, 0x10);
     ret |= es8311_write_reg(ES8311_ADC_REG1B, 0x0A);
     ret |= es8311_write_reg(ES8311_ADC_REG1C, 0x6A);
-    ret |= es8311_write_reg(ES8311_GPIO_REG44, 0xe8);
+    ret |= es8311_write_reg(ES8311_DAC_REG37, 0x48);
+    ret |= es8311_write_reg(ES8311_DAC_REG32, 0xBF);
 
     es8311_pa_power(true);
     return ESP_OK;
@@ -534,6 +533,7 @@ esp_err_t es8311_config_format(media_hal_codec_mode_t mode, media_hal_format_t f
 {
     esp_err_t ret = ESP_OK;
     uint8_t adc_iface = 0, dac_iface = 0;
+
     dac_iface = es8311_read_reg(ES8311_SDPIN_REG09);
     adc_iface = es8311_read_reg(ES8311_SDPOUT_REG0A);
     switch (fmt) {
@@ -558,7 +558,6 @@ esp_err_t es8311_config_format(media_hal_codec_mode_t mode, media_hal_format_t f
             dac_iface |= 0x03;
             break;
         default:
-            ESP_LOGW(TAG, "Unsupported I2S format. Setting to default I2S format");
             dac_iface &= 0xFC;
             adc_iface &= 0xFC;
             break;
@@ -587,7 +586,6 @@ esp_err_t es8311_set_bits_per_sample(media_hal_codec_mode_t mode, media_hal_bit_
             adc_iface |= 0x10;
             break;
         default:
-            ESP_LOGW(TAG, "Unsupported bit per sample. Setting to default 16 bits");
             dac_iface |= 0x0c;
             adc_iface |= 0x0c;
             break;
@@ -599,36 +597,26 @@ esp_err_t es8311_set_bits_per_sample(media_hal_codec_mode_t mode, media_hal_bit_
     return ret;
 }
 
-/*
-esp_err_t es8311_config_i2s(media_hal_codec_mode_t mode, media_hal_bit_length_t iface)
-{
-    int ret = ESP_OK;
-    ret |= es8311_set_bits_per_sample(bits);
-    ret |= es8311_config_format(fmt);
-    return ret;
-}
-*/
-
 esp_err_t es8311_ctrl_state(media_hal_codec_mode_t mode, media_hal_sel_state_t ctrl_state)
 {
     esp_err_t ret = ESP_OK;
-    int es_mode = 0;
+    es_module_t es_mode = ES_MODULE_MIN;
 
     switch (mode) {
         case MEDIA_HAL_CODEC_MODE_ENCODE:
-            es_mode  = 0x01;
-            break;
-        case MEDIA_HAL_CODEC_MODE_DECODE:
-            es_mode  = 0x02;
-            break;
-        case MEDIA_HAL_CODEC_MODE_BOTH:
-            es_mode  = 0x03;
+            es_mode  = ES_MODULE_ADC;
             break;
         case MEDIA_HAL_CODEC_MODE_LINE_IN:
-            es_mode  = 0x04;
+            es_mode  = ES_MODULE_LINE;
+            break;
+        case MEDIA_HAL_CODEC_MODE_DECODE:
+            es_mode  = ES_MODULE_DAC;
+            break;
+        case MEDIA_HAL_CODEC_MODE_BOTH:
+            es_mode  = ES_MODULE_ADC_DAC;
             break;
         default:
-            es_mode = 0x02;
+            es_mode = ES_MODULE_DAC;
             ESP_LOGW(TAG, "Codec mode not support, default is decode mode");
             break;
     }
@@ -640,10 +628,12 @@ esp_err_t es8311_ctrl_state(media_hal_codec_mode_t mode, media_hal_sel_state_t c
         ret |= es8311_stop(es_mode);
     }
 
+    es8311_pa_power(true);
     return ret;
+
 }
 
-esp_err_t es8311_start(int mode)
+esp_err_t es8311_start(es_module_t mode)
 {
     esp_err_t ret = ESP_OK;
     uint8_t adc_iface = 0, dac_iface = 0;
@@ -653,14 +643,14 @@ esp_err_t es8311_start(int mode)
     adc_iface |= BIT(6);
     dac_iface |= BIT(6);
 
-    if (mode == 0x04) {
+    if (mode == ES_MODULE_LINE) {
         ESP_LOGE(TAG, "The codec es8311 doesn't support ES_MODULE_LINE mode");
         return ESP_FAIL;
     }
-    if (mode == 0x01 || mode == 0x03) {
+    if (mode == ES_MODULE_ADC || mode == ES_MODULE_ADC_DAC) {
         adc_iface &= ~(BIT(6));
     }
-    if (mode == 0x02 || mode == 0x03) {
+    if (mode == ES_MODULE_DAC || mode == ES_MODULE_ADC_DAC) {
         dac_iface &= ~(BIT(6));
     }
 
@@ -695,7 +685,7 @@ esp_err_t es8311_start(int mode)
     return ret;
 }
 
-esp_err_t es8311_stop(int mode)
+esp_err_t es8311_stop(es_module_t mode)
 {
     esp_err_t ret = ESP_OK;
     es8311_suspend();
@@ -710,7 +700,12 @@ int es8311_set_volume(int volume)
     } else if (volume > 100) {
         volume = 100;
     }
-    int vol = (volume * (1410.0 / 1000)) + 50;
+    /* ES8311 chip allows for volume setting from -95.5dB to +32db (0x00 to
+     * 0xFF). 0dB gain corresponds to 0xBF = 191.
+     * To avoid distortion at high gain, restrict maximum volume to 0dB.
+     * To avoid complete blank, restrict minimum volume to -70dB
+     * */
+    int vol = (volume) * 1410 / 1000 + 50;
     ESP_LOGD(TAG, "SET: volume:%d", vol);
     ret = es8311_write_reg(ES8311_DAC_REG32, vol);
     return ret;
@@ -754,6 +749,7 @@ int es8311_get_mute(int *mute)
 esp_err_t es8311_set_mic_gain(es8311_mic_gain_t gain_db)
 {
     int res = 0;
+
     res = es8311_write_reg(ES8311_ADC_REG16, gain_db); // MIC gain scale
     return res;
 }

@@ -131,15 +131,33 @@ audio_codec_type_t audio_codec_get_identifier(audio_codec_t *codec);
 
 /**
  * Start the codec.
+ *
+ * Runs a decoder/encoder with specified configs.
  */
 esp_err_t audio_codec_start(audio_codec_t *codec);
 
 /**
- * Stop the codec.
+ * @brief   stop the codec.
  */
 esp_err_t audio_codec_stop(audio_codec_t *codec);
+
+/**
+ * @brief   pause the codec.
+ *
+ * @note    there are better ways to pause running player.
+ *          pause the i2s stream instead.
+ */
 esp_err_t audio_codec_pause(audio_codec_t *codec);
+
+/**
+ * @brief   resume the codec.
+ */
 esp_err_t audio_codec_resume(audio_codec_t *codec);
+
+/**
+ *  @brief  destry the codec.
+ *          This destroys running task for a codec
+ */
 esp_err_t audio_codec_destroy(audio_codec_t *codec);
 
 /**

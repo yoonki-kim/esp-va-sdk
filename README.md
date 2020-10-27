@@ -48,11 +48,16 @@
         * [8.4.1 Using Another DSP Driver](#841-using-another-dsp-driver)
         * [8.4.2 Writing your own DSP Driver](#842-writing-your-own-dsp-driver)
 * [9. Integration other components](#9-integrating-other-components)
-    * [9.1 RainMaker](#91-rainmaker)
+    * [9.1 ESP RainMaker](#91-esp-rainmaker)
         * [9.1.1 Environment Setup](#911-environment-setup)
-        * [9.1.2 Device Setup](#912-device-setup)
-        * [9.1.3 Device Provisioning](#913-device-provisioning)
-        * [9.1.4 Customisation](#914-customisation)
+        * [9.1.2 Device Provisioning](#912-device-provisioning)
+        * [9.1.3 Customisation](#913-customisation)
+    * [9.2 Smart Home](#92-smart-home)
+        * [9.2.1 Usage](#921-usage)
+        * [9.2.2 Customisation](#922-customisation)
+    * [9.3 Audio Player](#93-audio-player)
+        * [9.3.1 Enabling Custom Player](#931-enabling-custom-player)
+        * [9.3.2 Customisation](#932-customisation)
 * [10. Production Considerations](#10-production-considerations)
     * [10.1 Over-the-air Updates (OTA)](#101-over-the-air-updates-ota)
     * [10.2 Manufacturing](#102-manufacturing)
@@ -184,7 +189,11 @@ You should install drivers and support packages for your development host. Windo
 ```
 $ git clone --recursive https://github.com/espressif/esp-idf.git
 
-$ cd esp-idf; git checkout release/v4.0; git submodule init; git submodule update --init --recursive; cd ..
+$ cd esp-idf; git checkout release/v4.0; git submodule init; git submodule update --init --recursive;
+
+$ ./install.sh
+
+$ cd ..
 
 $ git clone https://github.com/espressif/esp-aws-iot.git
 
@@ -215,11 +224,16 @@ Set audio_board path. e.g. For ESP32-Vaquita-DSPG:
 $ export AUDIO_BOARD_PATH=/path/to/esp-va-sdk/components/audio_hal/audio_board/audio_board_vaquita_dspg
 ```
 
-Menuconfig changes: Do this change only if you are using ESP32-WROVER-E module:
+Menuconfig changes:
 ```
+Do this change only if you are using ESP32-WROVER-E module:
 $ idf.py menuconfig
+-> Component config -> ESP32-specific -> Minimum Supported ESP32 Revision -> change Rev_0 to Rev_3
 
--> component config -> esp32 specific -> Minimum Supported ESP32 Revision -> change Rev_0 to Rev_3
+Do these changes only if you are using ESP32 module with 4MB flash size:
+$ idf.py menuconfig
+-> Serial flasher config -> Flash size -> change to 4MB
+-> Partition Table -> Custom partition CSV file -> change to partitions_4mb_flash.csv
 ```
 
 ## 2.4 Flashing the Firmware
@@ -677,7 +691,7 @@ As you write the driver, please update the *audio_board.cmake* file to point to 
 
 # 9. Integrating other components
 
-## 9.1 RainMaker
+## 9.1 ESP RainMaker
 
 ### 9.1.1 Environment Setup
 
@@ -687,8 +701,6 @@ Additional setup that needs to be done for integrating [ESP RainMaker](https://r
     ```
     $ git clone https://github.com/espressif/esp-rainmaker.git
     ```
-*   Comment the 2 lines in esp-rainmaker/components/led_strip/src/led_strip_rmt_ws2812.c:148
-*   Follow this to setup the RainMaker CLI: https://rainmaker.espressif.com/docs/cli-setup.html
 *   Setting cloud_agent:
     ```
     $ export CLOUD_AGENT_PATH=/path/to/esp-rainmaker
@@ -696,26 +708,11 @@ Additional setup that needs to be done for integrating [ESP RainMaker](https://r
 *   Menuconfig changes:
     ```
     $ idf.py menuconfig
-
-    -> voice assistant configuration -> Enable cloud support -> enable this
+    -> Voice Assistant Configuration -> Enable cloud support -> enable this
+    -> ESP RainMaker Config -> Use Assisted Claiming -> enable this
     ```
 
-### 9.1.2 Device Setup
-
-[Claiming](https://rainmaker.espressif.com/docs/claiming.html) needs to be performed on the device for getting the certificates required by RainMaker:
-*   ```
-    cd /path/to/esp-rainmaker/cli
-    ```
-*   Login into your account with the CLI command:
-    ```
-    ./rainmaker.py login
-    ```
-*   Connect your device and run the claiminng command:
-    ```
-    ./rainmaker.py claim --addr 0x16000 $ESPPORT
-    ```
-
-### 9.1.3 Device Provisioning
+### 9.1.2 Device Provisioning
 
 Instead of using the ESP Alexa app, Use the RainMaker apps with Alexa integration:
 
@@ -727,15 +724,55 @@ Instead of using the ESP Alexa app, Use the RainMaker apps with Alexa integratio
 *   After that you will be asked to Sign in with Amazon.
 *   The phone app will verify and complete the setup after that.
 
-### 9.1.4 Customisation
+### 9.1.3 Customisation
 
-To customise your own device, you can edit the file examples/common/esp_cloud_rainmaker.c. You can check the examples in ESP RainMaker for some more device examples.
+To customise your own device, you can edit the file examples/additional_components/app_cloud/app_cloud_rainmaker.c. You can check the examples in ESP RainMaker for some more device examples.
+
+## 9.2 Smart Home
+
+One way to add the smart home functionality is to use [ESP RainMaker](#91-esp-rainmaker), and the other way is to use *examples/additional_components/app_smart_home*. This is initialized by default in the appilication.
+
+### 9.2.1 Usage
+
+Once provisioning is done and the device has booted up, the smart home feature of the device can be used via voice commands or through the Alexa app.
+
+Example: By default, the device configured is a 'Light' with 'Power' and 'Brightness' functionalities. Voice commands like 'Turn on the Light' or 'Change Light Brightness to 50' can be used. In the Alexa app, this device will show up as 'Light' and the Power and Brightness can be controlled.
+
+### 9.2.2 Customisation
+
+To customise your own device, you can edit the file examples/additional_components/app_smart_home/app_smart_home.c. You can refer the files *components/voice_assistant/include/smart_home.h* and *components/voice_assistant/include/alexa_smart_home.h* for additional APIs.
+
+A device can have the following types of capabilities/features/parameters:
+*   Power: A device can only have a single power param.
+*   Toggle: This can be used for params which can be toggled. Example: Turning on/off the swinging of the blades in an air conditioner.
+*   Range: This can be used for params which can have a range of values. Example: Changing the brightness of a light.
+*   Mode: This can be used for params which need to be selected from a pre-defined set of strings. Example: Selecting the modes of a washing machine.
+
+## 9.3 Audio Player
+
+The audio player (*components/voice_assistant/include/audio_player.h*) can be used to play custom audio files from any source (http url, local spiffs, etc.).
+
+The focus management (what is currently being played) is already implemented internally by the SDK. Speech/Alert/Music from Alexa has higher priority than what is played via the audio_player. So for example, if custom music is being played via the audio_player, and a query is asked, then the music will be paused and the response from Alexa will be played. Once the response is over, the music will be resumed (unless already stopped). Basically, all Alexa audio gets priority over custom audio.
+
+### 9.3.1 Enabling Custom Player
+
+The *examples/additional_components/custom player* is an example using the audio_player. The default example of the custom player can play from http url and/or local spiffs and/or local sdcard but can be easily extended to play from any other source.
+
+Easiest way to try custom player is using http url.
+
+*   Include *custom_player.h* in the application and call *custom_player_init()* after the voice assistant early initialisation has been done.
+
+When the application is now built and flashed on the device, the custom player will play the 3 files showing the usage of the audio_player.
+
+### 9.3.2 Customisation
+
+The default custom player just has a demo code which can be used as a reference to build your own player. The audio player, for now, just supports mp3 and aac audio formats for http urls and only mp3 audio format for local files.
 
 # 10. Production Considerations
 
 ## 10.1 Over-the-air Updates (OTA)
 
-ESP-IDF has a component for OTA from any URL. More information and details about implementing can be found here: [esp_https_ota](https://docs.espressif.com/projects/esp-idf/en/release-v3.2/api-reference/system/esp_https_ota.html#esp-https-ota).
+ESP-IDF has a component for OTA from any URL. More information and details about implementing can be found here: [esp_https_ota](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_https_ota.html#esp-https-ota).
 
 ## 10.2 Manufacturing
 

@@ -29,20 +29,22 @@ if(NOT (DEFINED AWS_IOT_PATH))
     set(AWS_IOT_PATH $ENV{AWS_IOT_PATH})
 endif()
 
-if(DEFINED PARTITIONS_4MB_FLASH_CSV)
-    set(ENV{PARTITION_TABLE_CSV_PATH} CMAKE_CURRENT_SOURCE_DIR/partitions_4mb_flash.csv)
-endif()
-
-set(EXTRA_COMPONENT_DIRS ../../components ../common ${AUDIO_BOARD_PATH}/../../../ ${AWS_IOT_PATH}/ )
-
-if(DEFINED CLOUD_AGENT_PATH)
-    list(APPEND EXTRA_COMPONENT_DIRS ${CLOUD_AGENT_PATH}/components)
-endif()
+set(EXTRA_COMPONENT_DIRS ../../components ../common ../additional_components ${AUDIO_BOARD_PATH}/../../../ ${AWS_IOT_PATH}/ )
 
 include($ENV{AUDIO_BOARD_PATH}/audio_board.cmake)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
+if(DEFINED ENV{CLOUD_AGENT_PATH})
+    idf_build_set_property(CLOUD_AGENT 1)
+    set(CLOUD_AGENT_PATH $ENV{CLOUD_AGENT_PATH})
+    list(APPEND EXTRA_COMPONENT_DIRS ${CLOUD_AGENT_PATH}/components)
+endif()
+
 idf_build_set_property(COMPILE_OPTIONS "-DVOICE_ASSISTANT_AIA" APPEND)
+
+if(DEFINED PARTITIONS_4MB_FLASH_CSV)
+    set(ENV{PARTITION_TABLE_CSV_PATH} CMAKE_CURRENT_SOURCE_DIR/partitions_4mb_flash.csv)
+endif()
 
 # SPIFFS specific configuration
 if(DEFINED DSP_EN_SPI_FFS)
