@@ -10,7 +10,7 @@ EXTRA_COMPONENT_DIRS += $(AUDIO_HAL_PATH)/dsp_driver/common_dsp
 
 # codec
 # export ESP_CODEC_PATH = es8388
-export ESP_CODEC_PATH = ac101
+export ESP_CODEC_PATH = ac101		# 2022-01-07; yoonki-kim
 EXTRA_COMPONENT_DIRS += $(AUDIO_HAL_PATH)/esp_codec
 
 # LED driver

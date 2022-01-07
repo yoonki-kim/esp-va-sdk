@@ -1,0 +1,8 @@
+{
+  "C_Cpp.intelliSenseEngine": "Tag Parser",
+  "files.associations": {
+    "audio_pipeline.h": "c",
+    "esp_log.h": "c"
+  },
+  "idf.adapterTargetName": "esp32"
+}
