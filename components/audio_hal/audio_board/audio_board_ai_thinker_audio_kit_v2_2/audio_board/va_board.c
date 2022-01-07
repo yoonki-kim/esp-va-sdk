@@ -36,11 +36,11 @@ static esp_err_t va_board_button_init()
 {
     button_driver_config_t button_driver_config = {
         .button_val = {
-            [BUTTON_EVENT_TAP_TO_TALK] = ((int64_t)1) << 36,
-            [BUTTON_EVENT_MIC_MUTE] = ((int64_t)1) << 39,
+            [BUTTON_EVENT_TAP_TO_TALK] = ((int64_t)1) << 5,     // KEY6
+            [BUTTON_EVENT_MIC_MUTE] = ((int64_t)1) << 18,       // KEY5
             [BUTTON_EVENT_VOLUME_UP] = -1,
             [BUTTON_EVENT_VOLUME_DOWN] = -1,
-            [BUTTON_EVENT_FACTORY_RST] = ((int64_t)1) << 36 | ((int64_t)1) << 39,
+            [BUTTON_EVENT_FACTORY_RST] = ((int64_t)1) << 5 | ((int64_t)1) << 18,
             [BUTTON_EVENT_CUSTOM_1] = -1,
             [BUTTON_EVENT_CUSTOM_2] = -1,
             [BUTTON_EVENT_IDLE] = -1,

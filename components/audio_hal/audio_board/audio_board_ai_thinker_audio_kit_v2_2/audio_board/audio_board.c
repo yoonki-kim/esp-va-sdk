@@ -33,15 +33,15 @@ esp_err_t audio_board_i2s_pin_config(int port_num, i2s_pin_config_t *pf_i2s_pin)
     PLAT_ASSERT(pf_i2s_pin, "Error assigning i2s pins", -1);
     switch(port_num) {
         case 0:
-            pf_i2s_pin->bck_io_num = GPIO_NUM_5;
-            pf_i2s_pin->ws_io_num =  GPIO_NUM_25;
-            pf_i2s_pin->data_out_num = GPIO_NUM_26;
+            pf_i2s_pin->bck_io_num = GPIO_NUM_27;
+            pf_i2s_pin->ws_io_num =  GPIO_NUM_26;
+            pf_i2s_pin->data_out_num = GPIO_NUM_25;
             pf_i2s_pin->data_in_num = GPIO_NUM_35;
             break;
         case 1:
-            pf_i2s_pin->bck_io_num = GPIO_NUM_5;
-            pf_i2s_pin->ws_io_num =  GPIO_NUM_25;
-            pf_i2s_pin->data_out_num = GPIO_NUM_26;
+            pf_i2s_pin->bck_io_num = GPIO_NUM_27;
+            pf_i2s_pin->ws_io_num =  GPIO_NUM_26;
+            pf_i2s_pin->data_out_num = GPIO_NUM_25;
             pf_i2s_pin->data_in_num = GPIO_NUM_35;
             break;
         default:
@@ -61,14 +61,14 @@ esp_err_t audio_board_i2c_pin_config(int port_num, i2c_config_t *pf_i2c_pin)
 
     switch(port_num) {
         case 0:
-            pf_i2c_pin->sda_io_num = GPIO_NUM_18;
-            pf_i2c_pin->scl_io_num = GPIO_NUM_23;
+            pf_i2c_pin->sda_io_num = GPIO_NUM_33;
+            pf_i2c_pin->scl_io_num = GPIO_NUM_32;
             pf_i2c_pin->sda_pullup_en = GPIO_PULLUP_ENABLE;
             pf_i2c_pin->scl_pullup_en = GPIO_PULLUP_ENABLE;
             break;
         case 1:
-            pf_i2c_pin->sda_io_num = GPIO_NUM_18;
-            pf_i2c_pin->scl_io_num = GPIO_NUM_23;
+            pf_i2c_pin->sda_io_num = GPIO_NUM_33;
+            pf_i2c_pin->scl_io_num = GPIO_NUM_32;
             pf_i2c_pin->sda_pullup_en = GPIO_PULLUP_ENABLE;
             pf_i2c_pin->scl_pullup_en = GPIO_PULLUP_ENABLE;
             break;

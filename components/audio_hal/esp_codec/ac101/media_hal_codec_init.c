@@ -26,16 +26,16 @@
 
 static void media_hal_func_init(media_hal_t* media_hal)
 {
-    media_hal->audio_codec_initialize = es8388_init;
-    media_hal->audio_codec_deinitialize = es8388_deinit;
-    media_hal->audio_codec_set_state = es8388_set_state;
-    media_hal->audio_codec_set_i2s_clk = es8388_set_i2s_clk;
-    media_hal->audio_codec_config_format = es8388_config_format;
-    media_hal->audio_codec_control_volume = es8388_control_volume;
-    media_hal->audio_codec_get_volume = es8388_get_volume;
-    media_hal->audio_codec_set_mute = es8388_set_mute;
-    media_hal->audio_codec_powerup = es8388_powerup;
-    media_hal->audio_codec_powerdown = es8388_powerdown;
+    media_hal->audio_codec_initialize = ac101_init;
+    media_hal->audio_codec_deinitialize = ac101_deinit;
+    media_hal->audio_codec_set_state = ac101_set_state;
+    media_hal->audio_codec_set_i2s_clk = ac101_set_i2s_clk;
+    media_hal->audio_codec_config_format = ac101_config_format;
+    media_hal->audio_codec_control_volume = ac101_control_volume;
+    media_hal->audio_codec_get_volume = ac101_get_volume;
+    media_hal->audio_codec_set_mute = ac101_set_mute;
+    media_hal->audio_codec_powerup = ac101_powerup;
+    media_hal->audio_codec_powerdown = ac101_powerdown;
 }
 
 esp_err_t media_hal_codec_init(media_hal_t *media_hal, media_hal_config_t *media_hal_conf)
