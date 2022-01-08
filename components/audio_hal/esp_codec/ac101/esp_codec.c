@@ -68,8 +68,8 @@ static esp_err_t audio_codec_i2c_init(int i2c_master_port)
 /**
  * @brief Write AC101 register
  *
- * @param slave_add : slave address
- * @param reg_add    : register address
+ * @param slave_addr : slave address
+ * @param reg_addr    : register address
  * @param data      : data to write
  *
  * @return
@@ -97,35 +97,31 @@ static esp_err_t ac101_write_reg(uint8_t slave_addr, uint8_t reg_addr, uint16_t 
 /**
  * @brief Read AC101 register
  *
- * @param reg_add    : register address
+ * @param reg_addr    : register address
  *
  * @return
  *     - (-1)     Error
  *     - (0)      Success
  */
-static esp_err_t ac101_read_reg(uint8_t reg_add, uint8_t *p_data)
+static esp_err_t ac101_read_reg(uint8_t reg_addr, uint16_t *p_data)
 {
-    uint8_t data;
+    uint16_t val = 0;
+    uint8_t data_rd[2];
     esp_err_t res;
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-
     res  = i2c_master_start(cmd);
-    res |= i2c_master_write_byte(cmd, AC101_ADDR, 1 /*ACK_CHECK_EN*/);
-    res |= i2c_master_write_byte(cmd, reg_add, 1 /*ACK_CHECK_EN*/);
-    res |= i2c_master_stop(cmd);
-    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
-    i2c_cmd_link_delete(cmd);
-
-    cmd = i2c_cmd_link_create();
+    res |= i2c_master_write_byte(cmd, (AC101_ADDR << 1) | WRITE_BIT, ACK_CHECK_EN);
+    res |= i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
     res |= i2c_master_start(cmd);
-    res |= i2c_master_write_byte(cmd, AC101_ADDR | 0x01, 1 /*ACK_CHECK_EN*/);
-    res |= i2c_master_read_byte(cmd, &data, 0x01/*NACK_VAL*/);
+    res |= i2c_master_write_byte(cmd, (AC101_ADDR << 1) | READ_BIT, ACK_CHECK_EN);
+    res |= i2c_master_read_byte(cmd, &data_rd, ACK_VAL);
     res |= i2c_master_stop(cmd);
-    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    res |= i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
 
     AC_ASSERT(res, "ac101_read_reg error", -1);
-    *p_data = data;
+    val = (data_rd[0] << 8) + data_rd[1];
+    *p_data = val;
     return res;
 }
 
@@ -167,56 +163,39 @@ static esp_err_t ac101_set_adc_dac_volume(media_hal_codec_mode_t mode, float vol
 esp_err_t ac101_set_state(media_hal_codec_mode_t mode, media_hal_sel_state_t media_hal_state)
 {
     esp_err_t res = 0;
-    uint8_t reg= 0;
+    uint8_t reg = 0;
     if(media_hal_state == MEDIA_HAL_START_STATE) {
-        uint8_t prev_data = 0, data = 0;
-        ac101_read_reg(AC101_DACCONTROL21, &prev_data);
         if (mode == MEDIA_HAL_CODEC_MODE_LINE_IN) {
-            res  = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL16, 0x09); // 0x00 audio on LIN1&RIN1,  0x09 LIN2&RIN2 by pass enable
-            res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL17, 0x50); // left DAC to left mixer enable  and  LIN signal to left mixer enable 0db  : bupass enable
-            res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL20, 0x50); // right DAC to right mixer enable  and  LIN signal to right mixer enable 0db : bupass enable
-            res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL21, 0xC0); //enable dac
-        } else {
-            res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL21, 0x80);   //enable dac
+            res |= ac101_write_reg(AC101_ADDR, AC101_ADC_SRC, 0x0408);
+            res |= ac101_write_reg(AC101_ADDR, AC101_ADC_DIG_CTRL, 0x8000);
+            res |= ac101_write_reg(AC101_ADDR, AC101_ADC_APC_CTRL, 0x3bc0);
         }
-        ac101_read_reg(AC101_DACCONTROL21, &data);
-        if (prev_data != data) {
-            res  = ac101_write_reg(AC101_ADDR, AC101_CHIPPOWER, 0xF0);   //start state machine
-            res |= ac101_write_reg(AC101_ADDR, AC101_CHIPPOWER, 0x00);   //start state machine
+        if (mode == MEDIA_HAL_CODEC_MODE_ENCODE || mode == MEDIA_HAL_CODEC_MODE_BOTH || mode == MEDIA_HAL_CODEC_MODE_LINE_IN) {
+            // I2S1_SDOUT_CTRL
+            // res |= ac101_write_reg(AC101_ADDR, AC101_PLL_CTRL2, 0x8120);
+            res |= ac101_write_reg(AC101_ADDR, AC101_MOD_CLK_ENA, 0x800c);
+            res |= ac101_write_reg(AC101_ADDR, AC101_MOD_RST_CTRL, 0x800c);
+            // res |= ac101_write_reg(AC101_ADDR, AC101_I2S_SR_CTRL, 0x3000);
         }
-        if (mode == MEDIA_HAL_CODEC_MODE_ENCODE || mode == MEDIA_HAL_CODEC_MODE_BOTH || mode == MEDIA_HAL_CODEC_MODE_LINE_IN)
-            res  = ac101_write_reg(AC101_ADDR, AC101_ADCPOWER, 0x00);   //power up adc and line in
         if (mode == MEDIA_HAL_CODEC_MODE_DECODE || mode == MEDIA_HAL_CODEC_MODE_BOTH || mode == MEDIA_HAL_CODEC_MODE_LINE_IN) {
-            res  = ac101_write_reg(AC101_ADDR, AC101_DACPOWER, 0x3c);   //power up dac and line out
-            /*
-            Here we mute the dac when the State for decoding is in STOP mode
-            Hence now we read the previous volume which has 33 steps in total
-            also ac101_control_volume parameter is in %, so multiply the register value by 3
-            */
-            res |= ac101_read_reg(AC101_DACCONTROL24, &reg);
-            reg  = reg * 3;
-            res |= ac101_control_volume(reg);
+            //* Enable Headphone output
+            res |= ac101_write_reg(AC101_ADDR, AC101_OMIXER_DACA_CTRL, 0xff80);
+            res |= ac101_write_reg(AC101_ADDR, AC101_HPOUT_CTRL, 0xc3c1);
+            res |= ac101_write_reg(AC101_ADDR, AC101_HPOUT_CTRL, 0xcb00);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            res |= ac101_write_reg(AC101_ADDR, AC101_HPOUT_CTRL, 0xfbc0);
+
+            //* Enable Speaker output
+            res |= ac101_write_reg(AC101_ADDR, AC101_SPKOUT_CTRL, 0xeabd);
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+            res |= ac101_control_volume(30);
         }
         return res;
     }
     if(media_hal_state == MEDIA_HAL_STOP_STATE) {
-        if (mode == MEDIA_HAL_CODEC_MODE_LINE_IN) {
-        res  = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL21, 0x80); //enable dac
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL16, 0x00); // 0x00 audio on LIN1&RIN1,  0x09 LIN2&RIN2
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL17, 0x90); // only left DAC to left mixer enable 0db
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL20, 0x90); // only right DAC to right mixer enable 0db
-        return res;
-        }
-        if (mode == MEDIA_HAL_CODEC_MODE_DECODE || mode == MEDIA_HAL_CODEC_MODE_BOTH) {
-            res  = ac101_write_reg(AC101_ADDR, AC101_DACPOWER, 0x00);
-            res |= ac101_control_volume(0);    //Mute
-        }
-        if (mode == MEDIA_HAL_CODEC_MODE_ENCODE || mode == MEDIA_HAL_CODEC_MODE_BOTH) {
-            res  = ac101_write_reg(AC101_ADDR, AC101_ADCPOWER, 0xFF);  //power down adc and line in
-        }
-        if (mode == MEDIA_HAL_CODEC_MODE_BOTH) {
-            res  = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL21, 0x9C);  //disable mclk
-        }
+        res |= ac101_write_reg(AC101_ADDR, HPOUT_CTRL, 0x0001);   // disable earphone
+        res |= ac101_write_reg(AC101_ADDR, SPKOUT_CTRL, 0xe880);   // disable speaker
+        res |= ac101_control_volume(0);
         return res;
     }
     return res;
@@ -338,57 +317,81 @@ esp_err_t ac101_config_format(media_hal_codec_mode_t mode, media_hal_format_t fm
     return res;
 }
 
+static uint16_t ac101_get_spk_volume(void) 
+{
+    uint16_t reg = 0;
+    ac101_read_reg(AC101_SPKOUT_CTRL, &reg);
+    reg &= 0x1f;    // volume : 0 ~ 31
+    return (reg * 2);
+}
+
+static esp_err_t ac101_set_spk_volume(uint8_t volume) 
+{
+    esp_err_t res = 0;
+    uint16_t reg = 0;
+
+    if (volume > 0x3f) {
+        volume = 0x3f;
+    }
+    volume = volume / 2;
+
+    res |= ac101_read_reg(AC101_SPKOUT_CTRL, &reg);
+    reg &= (~0x1f);
+    volume &= 0x1f;
+    reg |= volume;
+    res |= ac101_write_reg(AC101_ADDR, AC101_SPKOUT_CTRL, reg);
+
+    return res;
+}
+
+static uint16_t ac101_get_earph_volume(void) 
+{
+    uint16_t reg = 0;
+    ac101_read_reg(AC101_HPOUT_CTRL, &reg);
+    return (reg >> 4) & 0x3f;
+}
+
+static esp_err_t ac101_set_earph_volume(uint8_t volume) 
+{
+    esp_err_t res = 0;
+    uint16_t tmp, reg = 0;
+
+    if (volume > 0x3f) {
+        volume = 0x3f;
+    }
+
+    res |= ac101_read_reg(AC101_HPOUT_CTRL, &reg);
+    tmp =~(0x3f << 4);
+    reg &= tmp;
+    volume &= 0x3f;
+    reg |= (volume << 4);
+    res |= ac101_write_reg(AC101_ADDR, AC101_HPOUT_CTRL, reg);
+
+    return res;
+}
+
 esp_err_t ac101_control_volume(uint8_t volume)
 {
     esp_err_t res = 0;
-    curr_vol = volume;
-    uint8_t reg = 0;
-
-    if (volume > 100) {
-        volume = 100;
-    }
-    res = ac101_read_reg(AC101_DACCONTROL3, &reg);
-    reg = reg & 0xFB;
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL3, reg | (AC101_DISABLE_MUTE << 2));
-    volume /= 3;
-    res  = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL24, volume);
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL25, volume);
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL26, 0);
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL27, 0);
+    res |= ac101_set_spk_volume(volume);
+    res |= ac101_set_earph_volume(volume);
     return res;
 }
 
 esp_err_t ac101_get_volume(uint8_t *volume)
 {
     esp_err_t res = 0;
-    uint8_t reg = 0;
-    res = ac101_read_reg(AC101_DACCONTROL26, &reg);
-    if (res == ESP_FAIL) {
-        *volume = 0;
-    } else {
-        *volume = reg;
-        *volume *= 3;
-        if (*volume == 99) {
-            *volume = 100;
-        }
-    }
-    *volume = curr_vol;
+    *volume = (uint8_t) ac101_get_earph_volume();
     return res;
 }
 
 esp_err_t ac101_set_mute(bool bmute)
 {
     esp_err_t res = 0;
-    uint8_t reg = 0;
 
     if (bmute) {
-        res = ac101_read_reg(AC101_DACCONTROL3, &reg);
-        reg = reg & 0xFB;
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL3, reg | (AC101_ENABLE_MUTE << 2));
-    } else {
-        res = ac101_read_reg(AC101_DACCONTROL3, &reg);
-        reg = reg & 0xFB;
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL3, reg | (AC101_DISABLE_MUTE << 2));
+        res |= ac101_set_spk_volume(0);
+        reg |= ac101_set_earph_volume(0);
     }
     return res;
 }
@@ -422,42 +425,6 @@ int ac101_set_bits_per_sample(es_module_t mode, es_bits_length_t bits_length)
     return res;
 }
 
-#if 0
-/**
- * @param gain: Config DAC Output
- *
- * @return
- *     - (-1) Parameter error
- *     - (0)   Success
- */
-int ac101_config_dac_output(int output)
-{
-    int res;
-    uint8_t reg = 0;
-    res = ac101_read_reg(AC101_DACPOWER, &reg);
-    reg = reg & 0xc3;
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACPOWER, reg | output);
-    return res;
-}
-
-/**
- * @param gain: Config ADC input
- *
- * @return
- *     - (-1) Parameter error
- *     - (0)   Success
- */
-int ac101_config_adc_input(ac101_adc_input_t input)
-{
-    int res;
-    uint8_t reg = 0;
-    res = ac101_read_reg(AC101_ADCCONTROL2, &reg);
-    reg = reg & 0x0f;
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL2, reg | input);
-    return res;
-}
-#endif
-
 esp_err_t ac101_set_mic_gain(ac101_mic_gain_t gain)
 {
     esp_err_t ret;
@@ -476,9 +443,9 @@ void ac101_read_all_registers()
     }
 }
 
-esp_err_t ac101_write_register(uint8_t reg_add, uint16_t data)
+esp_err_t ac101_write_register(uint8_t reg_addr, uint16_t data)
 {
-    return ac101_write_reg(AC101_ADDR, reg_add, data);
+    return ac101_write_reg(AC101_ADDR, reg_addr, data);
 }
 
 esp_err_t ac101_set_i2s_clk(media_hal_codec_mode_t media_hal_codec_mode, media_hal_bit_length_t media_hal_bit_length)
