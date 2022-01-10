@@ -58,6 +58,8 @@ static esp_err_t audio_codec_i2c_init(int i2c_master_port)
     res = audio_board_i2c_pin_config(i2c_master_port, &pf_i2c_pin);
 
     pf_i2c_pin.mode = I2C_MODE_MASTER;
+	pf_i2c_pin.sda_pullup_en = GPIO_PULLUP_ENABLE,
+	pf_i2c_pin.scl_pullup_en = GPIO_PULLUP_ENABLE,
     pf_i2c_pin.master.clk_speed = AC101_I2C_MASTER_SPEED;
 
     res |= i2c_param_config(i2c_master_port, &pf_i2c_pin);
@@ -215,16 +217,14 @@ esp_err_t ac101_deinit(int port_num)
 
 esp_err_t ac101_powerup()
 {
-    esp_err_t ret;
-    ret = ac101_write_reg(AC101_ADDR, AC101_CHIPPOWER, 0x00);  //Power up codec
+    esp_err_t ret = 0;
     gpio_set_level(GPIO_PA_EN, 1);
     return ret;
 }
 
 esp_err_t ac101_powerdown()
 {
-    esp_err_t ret;
-    ret = ac101_write_reg(AC101_ADDR, AC101_CHIPPOWER, 0xFF);  //Power down codec
+    esp_err_t ret = 0;
     gpio_set_level(GPIO_PA_EN, 0);
     return ret;
 }
@@ -252,51 +252,53 @@ esp_err_t ac101_init(media_hal_config_t *media_hal_conf)
     gpio_config(&io_conf);
     gpio_set_level(GPIO_PA_EN, 1);
 #endif
-    res = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL3, 0x04);  // 0x04 mute/0x00 unmute&ramp;DAC unmute and  disabled digital volume control soft ramp
-    /* Chip Control and Power Management */
-    res |= ac101_write_reg(AC101_ADDR, AC101_CONTROL2, 0x50);
-    res |= ac101_write_reg(AC101_ADDR, AC101_CHIPPOWER, 0x00);         //normal all and power up all
-    res |= ac101_write_reg(AC101_ADDR, AC101_MASTERMODE, ac101_mode); //CODEC IN I2S SLAVE MODE
 
-    /* dac */
-    // res |= ac101_write_reg(AC101_ADDR, AC101_DACPOWER, 0xC0);       //disable DAC and disable Lout/Rout/1/2
-    res |= ac101_write_reg(AC101_ADDR, AC101_CONTROL1, 0x12);       //Enfr=0,Play&Record Mode,(0x17-both of mic&paly)
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL1, 0x18);    //1a 0x18:16bit iis , 0x00:24
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL2, 0x02);    //DACFsMode,SINGLE SPEED; DACFsRatio,256
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL16, 0x00);   // 0x00 audio on LIN1&RIN1,  0x09 LIN2&RIN2
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL17, 0x90);   // only left DAC to left mixer enable 0db
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL20, 0x90);   // only right DAC to right mixer enable 0db
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL21, 0x80);   //set internal ADC and DAC use the same LRCK clock, ADC LRCK as internal LRCK
-    res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL23, 0x00);   //vroi=0
-    res |= ac101_set_adc_dac_volume(MEDIA_HAL_CODEC_MODE_DECODE, 0);  // 0db
+    res = ac101_write_reg(AC101_ADDR, AC101_CHIP_AUDIO_RS, 0x123);
+    vTashDelay(1000 / portTICK_PERIOD_MS);
 
-    /* adc */
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCPOWER, 0xFF);    //power down adc
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL1, 0x88); //0x88 MIC PGA =24DB
-
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL3, 0x02);
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL4, 0x0c); //0d 0x0c I2S-16BIT, LEFT ADC DATA = LIN1 , RIGHT ADC DATA =RIN1
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL5, 0x02);  //ADCFsMode,singel SPEED,RATIO=256
-    //ALC for Microphone
-    res |= ac101_set_adc_dac_volume(MEDIA_HAL_CODEC_MODE_ENCODE, 0);      // 0db
-    res |= ac101_write_reg(AC101_ADDR, AC101_ADCPOWER, 0x09); //Power up ADC, Enable LIN&RIN, Power down MICBIAS, set int1lp to low power mode
-
-    if(ac101_dac_output == MEDIA_HAL_DAC_OUTPUT_LINE2) {
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACPOWER, 0x28);  //Enable Lout/Rout 2
-    } else if(ac101_dac_output == MEDIA_HAL_DAC_OUTPUT_ALL) {
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACPOWER, 0x3c);  //Enable Lout/Rout 1 and 2 both
+    if (res != ESP_OK) {
+        ESP_LOGE(TAG, "AC101 reset failed!");
+        return res;
     } else {
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACPOWER, 0x14);  //Default: Enable Lout/Rout 1
+        ESP_LOGW(TAG, "AC101 reset succeed");
     }
-    if(ac101_adc_input == MEDIA_HAL_ADC_INPUT_LINE2) {
-        res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL2, 0x50);  // Enable LIN2/RIN2 as ADC input
-    } else if(ac101_adc_input == MEDIA_HAL_ADC_INPUT_DIFFERENCE) {
-        res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL2, 0xf0);  // Enable LIN1/RIN1 as well as LIN2/RIN2 for ADC input
-    } else {
-        res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL2, 0x00);  //Default: Enable LIN1/RIN1 as ADC input
-    }
-    //     ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL8, 0xC0);
-    //res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL9,0xC0);
+    
+    res |= ac101_write_reg(AC101_ADDR, AC101_SPKOUT_CTRL, 0xe880);
+
+	//Enable the PLL from 256*44.1KHz MCLK source
+	res |= ac101_write_reg(AC101_ADDR, AC101_PLL_CTRL1, 0x014f);
+	//res |= ac101_write_reg(AC101_ADDR, AC101_PLL_CTRL2, 0x83c0);
+	res |= ac101_write_reg(AC101_ADDR, AC101_PLL_CTRL2, 0x8600);
+
+	//Clocking system
+	res |= ac101_write_reg(AC101_ADDR, AC101_SYSCLK_CTRL, 0x8b08);
+	res |= ac101_write_reg(AC101_ADDR, AC101_MOD_CLK_ENA, 0x800c);
+	res |= ac101_write_reg(AC101_ADDR, AC101_MOD_RST_CTRL, 0x800c);
+	res |= ac101_write_reg(AC101_ADDR, AC101_I2S_SR_CTRL, 0x7000); //sample rate
+
+	//AIF config
+	res |= ac101_write_reg(AC101_ADDR, AC101_I2S1LCK_CTRL, 0x8850);	//BCLK/LRCK
+	res |= ac101_write_reg(AC101_ADDR, AC101_I2S1_SDOUT_CTRL, 0xc000); //
+	res |= ac101_write_reg(AC101_ADDR, AC101_I2S1_SDIN_CTRL, 0xc000);
+	res |= ac101_write_reg(AC101_ADDR, AC101_I2S1_MXR_SRC, 0x2200); //
+
+	res |= ac101_write_reg(AC101_ADDR, AC101_ADC_SRCBST_CTRL, 0xccc4);
+	res |= ac101_write_reg(AC101_ADDR, AC101_ADC_SRC, 0x2020);
+	res |= ac101_write_reg(AC101_ADDR, AC101_ADC_DIG_CTRL, 0x8000);
+	res |= ac101_write_reg(AC101_ADDR, AC101_ADC_APC_CTRL, 0xbbc3);
+
+	//Path Configuration
+	res |= ac101_write_reg(AC101_ADDR, AC101_DAC_MXR_SRC, 0xcc00);
+	res |= ac101_write_reg(AC101_ADDR, AC101_DAC_DIG_CTRL, 0x8000);
+	res |= ac101_write_reg(AC101_ADDR, AC101_OMIXER_SR, 0x0081);
+	res |= ac101_write_reg(AC101_ADDR, AC101_OMIXER_DACA_CTRL, 0xf080); //}
+
+	//* Enable Speaker output
+	res |= ac101_write_reg(AC101_ADDR, AC101_SPKOUT_CTRL, 0xeabd);
+
+	ESP_LOGI(TAG, "init done");
+	ac101_powerup();
+
     return res;
 }
 
