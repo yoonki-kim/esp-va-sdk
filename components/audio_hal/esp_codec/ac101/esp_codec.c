@@ -127,40 +127,40 @@ static esp_err_t ac101_read_reg(uint8_t reg_addr, uint16_t *p_data)
     return res;
 }
 
-/**
- * @brief Configure AC101 ADC and DAC volume. Basicly you can consider this as ADC and DAC gain
- *
- * @param mode:             set ADC or DAC or all
- * @param volume:           -96 ~ 0              for example ac101_set_adc_dac_volume(AC101_MODULE_ADC, 30, 6); means set ADC volume -30.5db
- * @param dot:              whether include 0.5. for example ac101_set_adc_dac_volume(AC101_MODULE_ADC, 30, 4); means set ADC volume -30db
- *
- * @return
- *     - (-1) Parameter error
- *     - (0)   Success
- */
-static esp_err_t ac101_set_adc_dac_volume(media_hal_codec_mode_t mode, float volume)
-{
-    esp_err_t res = 0;
-    uint8_t vol;
-    if ( volume < -96 || volume > 0 ) {
-        LOG_AC101("Warning: volume < -96! or > 0!\n");
-        if (volume < -96)
-            volume = -96;
-        else
-            volume = 0;
-    }
-    vol = (uint8_t) ((-1) * (volume * 2));
+// /**
+//  * @brief Configure AC101 ADC and DAC volume. Basicly you can consider this as ADC and DAC gain
+//  *
+//  * @param mode:             set ADC or DAC or all
+//  * @param volume:           -96 ~ 0              for example ac101_set_adc_dac_volume(AC101_MODULE_ADC, 30, 6); means set ADC volume -30.5db
+//  * @param dot:              whether include 0.5. for example ac101_set_adc_dac_volume(AC101_MODULE_ADC, 30, 4); means set ADC volume -30db
+//  *
+//  * @return
+//  *     - (-1) Parameter error
+//  *     - (0)   Success
+//  */
+// static esp_err_t ac101_set_adc_dac_volume(media_hal_codec_mode_t mode, float volume)
+// {
+//     esp_err_t res = 0;
+//     uint8_t vol;
+//     if ( volume < -96 || volume > 0 ) {
+//         LOG_AC101("Warning: volume < -96! or > 0!\n");
+//         if (volume < -96)
+//             volume = -96;
+//         else
+//             volume = 0;
+//     }
+//     vol = (uint8_t) ((-1) * (volume * 2));
 
-    if (mode == MEDIA_HAL_CODEC_MODE_ENCODE || mode == MEDIA_HAL_CODEC_MODE_BOTH) {
-        res  = ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL8, vol);
-        res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL9, vol);  //ADC Right Volume=0db
-    }
-    if (mode == MEDIA_HAL_CODEC_MODE_DECODE || mode == MEDIA_HAL_CODEC_MODE_BOTH) {
-        res  = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL5, vol);
-        res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL4, vol);
-    }
-    return res;
-}
+//     if (mode == MEDIA_HAL_CODEC_MODE_ENCODE || mode == MEDIA_HAL_CODEC_MODE_BOTH) {
+//         res  = ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL8, vol);
+//         res |= ac101_write_reg(AC101_ADDR, AC101_ADCCONTROL9, vol);  //ADC Right Volume=0db
+//     }
+//     if (mode == MEDIA_HAL_CODEC_MODE_DECODE || mode == MEDIA_HAL_CODEC_MODE_BOTH) {
+//         res  = ac101_write_reg(AC101_ADDR, AC101_DACCONTROL5, vol);
+//         res |= ac101_write_reg(AC101_ADDR, AC101_DACCONTROL4, vol);
+//     }
+//     return res;
+// }
 
 esp_err_t ac101_set_state(media_hal_codec_mode_t mode, media_hal_sel_state_t media_hal_state)
 {
@@ -195,8 +195,8 @@ esp_err_t ac101_set_state(media_hal_codec_mode_t mode, media_hal_sel_state_t med
         return res;
     }
     if(media_hal_state == MEDIA_HAL_STOP_STATE) {
-        res |= ac101_write_reg(AC101_ADDR, HPOUT_CTRL, 0x0001);   // disable earphone
-        res |= ac101_write_reg(AC101_ADDR, SPKOUT_CTRL, 0xe880);   // disable speaker
+        res |= ac101_write_reg(AC101_ADDR, AC101_HPOUT_CTRL, 0x0001);   // disable earphone
+        res |= ac101_write_reg(AC101_ADDR, AC101_SPKOUT_CTRL, 0xe880);   // disable speaker
         res |= ac101_control_volume(0);
         return res;
     }
@@ -302,6 +302,20 @@ esp_err_t ac101_init(media_hal_config_t *media_hal_conf)
     return res;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 2022-02-03....
 esp_err_t ac101_config_format(media_hal_codec_mode_t mode, media_hal_format_t fmt)
 {
     esp_err_t res = 0;
